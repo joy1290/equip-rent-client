@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EquipRent – Equipment Rental Platform
 
-## Getting Started
+EquipRent is a full-stack equipment rental platform that allows users to explore equipment, manage bookings, and make secure online payments.
 
-First, run the development server:
+## Live Demo
+
+**Live Website:** https://equip-rent-client.vercel.app/
+
+**Backend API:** https://equip-rent-server.vercel.app/
+
+## Repositories
+
+- **Frontend:** https://github.com/joy1290/equip-rent-client
+- **Backend:** https://github.com/joy1290/equip-rent-server
+
+## Features
+
+- Browse available rental equipment
+- User registration and login
+- Google authentication
+- Equipment search and filtering
+- Add and manage favorite equipment
+- Create and manage rental bookings
+- Secure online payments with Stripe Checkout
+- User account and booking management
+- Responsive user interface
+
+## Technologies Used
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS
+- Better Auth
+- Base UI
+- Framer Motion
+- Lucide React
+- React Hot Toast
+- Stripe integration
+
+## Installation and Setup
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/joy1290/equip-rent-client.git
+```
+
+### 2. Navigate to the project directory
+
+```bash
+cd equip-rent-client
+```
+
+### 3. Install dependencies
+
+```bash
+npm install
+```
+
+### 4. Configure environment variables
+
+Create a `.env.local` file in the project root:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+```
+
+For production, use your deployed backend URL:
+
+```env
+NEXT_PUBLIC_API_URL=https://equip-rent-server.vercel.app/api
+```
+
+### 5. Run the development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build for Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+The frontend is deployed on Vercel.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Live URL:** https://equip-rent-client.vercel.app/
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Backend Repository
 
-## Deploy on Vercel
+https://github.com/joy1290/equip-rent-server
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is developed for learning and portfolio purposes.
