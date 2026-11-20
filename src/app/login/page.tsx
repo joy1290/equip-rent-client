@@ -27,7 +27,8 @@ export default function LoginPage() {
         return;
       }
 
-      window.location.href = "/";
+      // Redirect to Home Page
+      window.location.replace("/");
     } catch {
       setMessage("Something went wrong!");
     } finally {
@@ -68,7 +69,7 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={handleGoogleLogin}
-          disabled={googleLoading || loading}
+          disabled={loading || googleLoading}
           className="flex w-full items-center justify-center gap-3 rounded-lg border p-3 font-medium transition hover:bg-gray-50 disabled:opacity-50"
         >
           <GoogleIcon />

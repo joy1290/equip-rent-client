@@ -29,7 +29,8 @@ export default function SignupPage() {
         return;
       }
 
-      setMessage("Account created successfully!");
+      // Redirect to Home Page
+      window.location.replace("/");
     } catch {
       setMessage("Something went wrong!");
     } finally {
@@ -37,7 +38,7 @@ export default function SignupPage() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleSignup = async () => {
     setMessage("");
     setGoogleLoading(true);
 
@@ -69,8 +70,8 @@ export default function SignupPage() {
         {/* Google Signup */}
         <button
           type="button"
-          onClick={handleGoogleLogin}
-          disabled={googleLoading || loading}
+          onClick={handleGoogleSignup}
+          disabled={loading || googleLoading}
           className="flex w-full items-center justify-center gap-3 rounded-lg border p-3 font-medium transition hover:bg-gray-50 disabled:opacity-50"
         >
           <GoogleIcon />
