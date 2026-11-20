@@ -60,17 +60,28 @@ npm install
 
 ### 4. Configure environment variables
 
-Create a `.env.local` file in the project root:
+Copy `.env.example` to `.env.local` in the project root:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api
+# Backend the dev server proxies /api/* to (see next.config.ts)
+BACKEND_URL=http://localhost:5000
+# API base used in the browser — must stay relative so auth cookies are first-party
+NEXT_PUBLIC_API_URL=/api
 ```
 
-For production, use your deployed backend URL:
+Both values have working defaults for local development, so this step is
+optional on your machine. For production, set them in Vercel:
 
 ```env
-NEXT_PUBLIC_API_URL=https://equip-rent-server.vercel.app/api
+BACKEND_URL=https://equip-rent-server.vercel.app
+NEXT_PUBLIC_API_URL=/api
 ```
+
+> **Why a proxy?** All `/api/*` traffic is forwarded to the backend by
+> Next.js so the browser only ever talks to one origin. Better Auth's OAuth
+> state and session cookies are `SameSite=Lax`, which browsers refuse to
+> send across sites — calling the backend directly made Google login fail
+> with `error=state_mismatch`.
 
 ### 5. Run the development server
 
