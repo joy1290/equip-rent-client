@@ -114,6 +114,7 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          autoComplete="current-password"
           className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
         />
 

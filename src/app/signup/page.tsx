@@ -149,6 +149,7 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
+          autoComplete="new-password"
           className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
         />
         <p className="-mt-2 text-xs text-gray-500">
