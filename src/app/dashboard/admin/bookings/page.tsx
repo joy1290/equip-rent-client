@@ -31,6 +31,9 @@ interface Booking {
   bookingStatus: "Pending" | "Confirmed" | "Cancelled";
   createdAt: string;
   updatedAt: string;
+  customer?: { id: string; name?: string; email?: string };
+  owner?: { id: string; name?: string; email?: string };
+  equipment?: { id: string; name?: string; category?: string };
 }
 
 interface BookingResponse {
@@ -93,7 +96,10 @@ export default function AdminBookingsPage() {
         booking._id.toLowerCase().includes(search) ||
         booking.customerId.toLowerCase().includes(search) ||
         booking.ownerId.toLowerCase().includes(search) ||
-        booking.equipmentId.toLowerCase().includes(search);
+        booking.equipmentId.toLowerCase().includes(search) ||
+        (booking.customer?.name ?? "").toLowerCase().includes(search) ||
+        (booking.owner?.name ?? "").toLowerCase().includes(search) ||
+        (booking.equipment?.name ?? "").toLowerCase().includes(search);
 
       const matchesStatus =
         statusFilter === "All" ||
@@ -255,7 +261,7 @@ export default function AdminBookingsPage() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search booking, customer or equipment ID..."
+                placeholder="Search by booking, customer, owner or equipment name..."
                 className="w-full rounded-lg border border-gray-200 py-3 pl-10 pr-4 text-sm outline-none focus:border-[#5c53fe]"
               />
             </div>
@@ -318,8 +324,9 @@ export default function AdminBookingsPage() {
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                   <tr>
                     <th className="px-5 py-4">Booking ID</th>
-                    <th className="px-5 py-4">Equipment ID</th>
-                    <th className="px-5 py-4">Customer ID</th>
+                    <th className="px-5 py-4">Equipment</th>
+                    <th className="px-5 py-4">Customer</th>
+                    <th className="px-5 py-4">Owner</th>
                     <th className="px-5 py-4">Rental Period</th>
                     <th className="px-5 py-4">Amount</th>
                     <th className="px-5 py-4">Booking Status</th>
@@ -345,7 +352,7 @@ export default function AdminBookingsPage() {
 
                       <td className="px-5 py-4">
                         <p className="font-medium text-gray-700">
-                          {booking.equipmentId.slice(-8)}
+                          {booking.equipment?.name || "Equipment"}
                         </p>
                         <p className="mt-1 text-xs text-gray-400">
                           Qty: {booking.quantity}
@@ -353,8 +360,26 @@ export default function AdminBookingsPage() {
                       </td>
 
                       <td className="px-5 py-4">
-                        <p className="max-w-[130px] truncate text-gray-700" title={booking.customerId}>
-                          {booking.customerId}
+                        <p className="max-w-[150px] truncate font-medium text-gray-700">
+                          {booking.customer?.name || "Customer"}
+                        </p>
+                        <p
+                          className="mt-1 max-w-[150px] truncate text-xs text-gray-400"
+                          title={booking.customer?.email}
+                        >
+                          {booking.customer?.email}
+                        </p>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <p className="max-w-[150px] truncate font-medium text-gray-700">
+                          {booking.owner?.name || "Owner"}
+                        </p>
+                        <p
+                          className="mt-1 max-w-[150px] truncate text-xs text-gray-400"
+                          title={booking.owner?.email}
+                        >
+                          {booking.owner?.email}
                         </p>
                       </td>
 

@@ -3,8 +3,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/bookings`;
+
 interface Booking {
   _id: string;
   customerId: string;
@@ -20,7 +22,36 @@ interface Booking {
   paymentStatus: string;
   bookingStatus: string;
   createdAt: string;
+  customer?: { id: string; name?: string; email?: string };
+  owner?: { id: string; name?: string; email?: string };
+  equipment?: { id: string; name?: string; category?: string };
 }
+
+const paymentBadge: Record<string, string> = {
+  Paid: "bg-green-100 text-green-700",
+  Pending: "bg-yellow-100 text-yellow-700",
+  Failed: "bg-red-100 text-red-600",
+  Refunded: "bg-gray-100 text-gray-600",
+};
+
+const bookingBadge: Record<string, string> = {
+  Confirmed: "bg-green-100 text-green-700",
+  Pending: "bg-yellow-100 text-yellow-700",
+  Completed: "bg-blue-100 text-blue-700",
+  Cancelled: "bg-red-100 text-red-600",
+};
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-GB");
+
+const rentalDays = (start: string, end: string) =>
+  Math.max(
+    1,
+    Math.ceil(
+      (new Date(end).getTime() - new Date(start).getTime()) /
+        (1000 * 60 * 60 * 24)
+    )
+  );
 
 export default function OwnerBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -106,8 +137,9 @@ export default function OwnerBookingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-gray-600">
-        Loading bookings...
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="mr-2 animate-spin text-blue-600" />
+        <span className="text-gray-600">Loading bookings...</span>
       </div>
     );
   }
@@ -118,7 +150,7 @@ export default function OwnerBookingsPage() {
         <p className="mb-4 text-red-600">{error}</p>
         <button
           onClick={fetchBookings}
-          className="rounded-lg bg-indigo-600 px-5 py-2 text-white hover:bg-indigo-700"
+          className="rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
         >
           Try Again
         </button>
@@ -127,15 +159,15 @@ export default function OwnerBookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold text-gray-900">
-            Booking Management
+            My Equipment Rentals
           </h1>
 
           <p className="text-gray-600">
-            Manage your equipment rental bookings.
+            Manage rental requests for your listed equipment.
           </p>
         </div>
 
@@ -150,129 +182,134 @@ export default function OwnerBookingsPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-5">
-            {bookings.map((booking) => (
-              <div
-                key={booking._id}
-                className="rounded-xl border bg-white p-6 shadow-sm"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="break-all text-lg font-bold">
-                    Booking #{booking._id}
-                  </h2>
+          <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-4 py-3">Customer Information</th>
+                  <th className="px-4 py-3">Equipment Information</th>
+                  <th className="px-4 py-3">Rental Duration</th>
+                  <th className="px-4 py-3">Required Quantity</th>
+                  <th className="px-4 py-3">Booking Amount</th>
+                  <th className="px-4 py-3">Payment Status</th>
+                  <th className="px-4 py-3">Booking Status</th>
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
 
-                  <span
-                    className={`rounded-full px-3 py-1 text-sm font-medium ${
-                      booking.bookingStatus === "Confirmed"
-                        ? "bg-green-100 text-green-800"
-                        : booking.bookingStatus === "Cancelled"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-yellow-100 text-yellow-800"
-                    }`}
+              <tbody className="divide-y divide-gray-100">
+                {bookings.map((booking) => (
+                  <tr
+                    key={booking._id}
+                    className="align-top transition hover:bg-gray-50"
                   >
-                    {booking.bookingStatus}
-                  </span>
-                </div>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">
+                        {booking.customer?.name || "Customer"}
+                      </p>
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <p className="text-sm text-gray-500">Equipment ID</p>
-                    <p className="break-all font-medium">
-                      {booking.equipmentId}
-                    </p>
-                  </div>
+                      <p className="truncate text-xs text-gray-500">
+                        {booking.customer?.email}
+                      </p>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Customer ID</p>
-                    <p className="break-all font-medium">
-                      {booking.customerId}
-                    </p>
-                  </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {booking.contactNumber}
+                      </p>
+                    </td>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Quantity</p>
-                    <p className="font-medium">{booking.quantity}</p>
-                  </div>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">
+                        {booking.equipment?.name || "Equipment"}
+                      </p>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Start Date</p>
-                    <p className="font-medium">
-                      {new Date(booking.startDate).toLocaleDateString()}
-                    </p>
-                  </div>
+                      <p className="text-xs text-gray-500">
+                        {booking.equipment?.category}
+                      </p>
+                    </td>
 
-                  <div>
-                    <p className="text-sm text-gray-500">End Date</p>
-                    <p className="font-medium">
-                      {new Date(booking.endDate).toLocaleDateString()}
-                    </p>
-                  </div>
+                    <td className="px-4 py-3 text-gray-600">
+                      <p className="font-medium text-gray-900">
+                        {rentalDays(booking.startDate, booking.endDate)}{" "}
+                        days
+                      </p>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Total Amount</p>
-                    <p className="font-bold text-indigo-600">
-                      ৳{booking.totalAmount}
-                    </p>
-                  </div>
+                      <p className="text-xs text-gray-500">
+                        {formatDate(booking.startDate)} →{" "}
+                        {formatDate(booking.endDate)}
+                      </p>
+                    </td>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Contact Number</p>
-                    <p className="font-medium">{booking.contactNumber}</p>
-                  </div>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {booking.quantity}
+                    </td>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Delivery Address</p>
-                    <p className="font-medium">
-                      {booking.deliveryAddress}
-                    </p>
-                  </div>
+                    <td className="px-4 py-3 font-semibold text-gray-900">
+                      ৳{booking.totalAmount.toLocaleString("en-BD")}
+                    </td>
 
-                  <div>
-                    <p className="text-sm text-gray-500">Payment Status</p>
-                    <p className="font-medium">{booking.paymentStatus}</p>
-                  </div>
-                </div>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          paymentBadge[booking.paymentStatus] ||
+                          "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {booking.paymentStatus}
+                      </span>
+                    </td>
 
-                {booking.additionalNotes && (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-500">
-                      Additional Notes
-                    </p>
-                    <p className="font-medium">
-                      {booking.additionalNotes}
-                    </p>
-                  </div>
-                )}
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          bookingBadge[booking.bookingStatus] ||
+                          "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {booking.bookingStatus}
+                      </span>
+                    </td>
 
-                {booking.bookingStatus === "Pending" && (
-                  <div className="mt-6 flex flex-wrap gap-3 border-t pt-5">
-                    <button
-                      onClick={() =>
-                        handleBookingStatus(booking._id, "Confirmed")
-                      }
-                      disabled={updatingId === booking._id}
-                      className="rounded-lg bg-green-600 px-5 py-2.5 font-medium text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {updatingId === booking._id
-                        ? "Updating..."
-                        : "Approve Booking"}
-                    </button>
+                    <td className="px-4 py-3">
+                      {booking.bookingStatus === "Pending" ? (
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() =>
+                              handleBookingStatus(
+                                booking._id,
+                                "Confirmed"
+                              )
+                            }
+                            disabled={updatingId === booking._id}
+                            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {updatingId === booking._id
+                              ? "Updating..."
+                              : "Approve"}
+                          </button>
 
-                    <button
-                      onClick={() =>
-                        handleBookingStatus(booking._id, "Cancelled")
-                      }
-                      disabled={updatingId === booking._id}
-                      className="rounded-lg bg-red-600 px-5 py-2.5 font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {updatingId === booking._id
-                        ? "Updating..."
-                        : "Reject Booking"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                          <button
+                            onClick={() =>
+                              handleBookingStatus(
+                                booking._id,
+                                "Cancelled"
+                              )
+                            }
+                            disabled={updatingId === booking._id}
+                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">
+                          —
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
