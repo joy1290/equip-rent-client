@@ -84,61 +84,6 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
-}
-
-/* =========================================================================
-   Dark mode (class strategy — toggled on <html> and saved in localStorage)
-
-   The UI is built with explicit light utilities (bg-white, text-gray-*),
-   so dark mode remaps the common surfaces, text and borders directly.
-   These rules are intentionally unlayered so they win over Tailwind's
-   layered utilities while the `.dark` class is present.
-   ========================================================================= */
-
-.dark {
   color-scheme: dark;
 }
 
@@ -193,9 +138,6 @@
 }
 .dark .text-gray-400 {
   color: #64748b;
-}
-.dark .text-gray-300 {
-  color: #cbd5e1;
 }
 
 /* ---- Borders & table dividers ---- */
@@ -256,4 +198,82 @@
 .dark input::placeholder,
 .dark textarea::placeholder {
   color: #64748b;
+}
+
+/* =========================================================================
+   Custom design improvements for EquipRent
+   ========================================================================= */
+
+/* Consistent heading style across all sections */
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* Ensure links are readable */
+a {
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+a:hover {
+  color: var(--primary) !important;
+}
+
+/* Improve card hover effects */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Consistent button style */
+.btn-primary {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.btn-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+  transform: translateY(-1px);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid hsl(var(--primary-foreground));
+  outline-offset: 2;
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
+  outline-offset: 2px;
+}
+
+/* Improve form element styling */
+input,
+select,
+textarea {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Improve table striping */
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: color-mix(in srgb, var(--background), white) !important;
+}
+
+/* Improve selection color */
+::selection {
+  background-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  color: var(--primary-foreground);
 }

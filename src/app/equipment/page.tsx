@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -11,6 +10,8 @@ import {
   MapPin,
   Search,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 
@@ -41,6 +42,13 @@ interface EquipmentResponse {
   message?: string;
 }
 
+interface PaginationInfo {
+  total: number;
+  page: number;
+  limit: number;
+  lastPage: number;
+}
+
 export default function AllEquipmentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,6 +70,10 @@ export default function AllEquipmentPage() {
 
   const [sort, setSort] = useState("price-asc");
 
+  const [page, setPage] = useState(1);
+
+  const ITEMS_PER_PAGE = 20;
+
   // Initialize filters from URL
   useEffect(() => {
     setFilters({
@@ -75,6 +87,11 @@ export default function AllEquipmentPage() {
     });
 
     setSort(searchParams.get("sort") || "price-asc");
+
+    const pageFromUrl = searchParams.get("page");
+    if (pageFromUrl && Number.isInteger(Number(pageFromUrl)) && Number(pageFromUrl) >= 1) {
+      setPage(Number(pageFromUrl));
+    }
   }, [searchParams]);
 
   // Fetch equipment
@@ -90,8 +107,8 @@ export default function AllEquipmentPage() {
       });
 
       params.set("sort", sort);
-      params.set("page", "1");
-      params.set("limit", "20");
+      params.set("page", String(page));
+      params.set("limit", String(ITEMS_PER_PAGE));
 
       const response = await fetch(
         `${API_URL}/equipment/search/filter?${params.toString()}`,
@@ -128,7 +145,7 @@ export default function AllEquipmentPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, sort]);
+  }, [filters, sort, page]);
 
   useEffect(() => {
     fetchEquipment();
@@ -146,7 +163,7 @@ export default function AllEquipmentPage() {
     }));
   };
 
-  // Apply filters to URL
+  // Apply filters to URL with pagination
   const handleApplyFilters = () => {
     const params = new URLSearchParams();
 
@@ -155,6 +172,7 @@ export default function AllEquipmentPage() {
     });
 
     params.set("sort", sort);
+    params.set("page", "1");
 
     router.replace(`/equipment?${params.toString()}`);
   };
@@ -172,8 +190,11 @@ export default function AllEquipmentPage() {
     });
 
     setSort("price-asc");
+    setPage(1);
     router.replace("/equipment");
   };
+
+  const lastPage = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 lg:px-8">
@@ -207,7 +228,7 @@ export default function AllEquipmentPage() {
                   value={filters.search}
                   onChange={handleFilterChange}
                   placeholder="Equipment name..."
-                  className="w-full rounded-lg border py-2.5 pl-10 pr-3 outline-none focus:border-indigo-500"
+                  className="w-full rounded-lg border py-2.5 pl-10 pr-3 outline-none focus-border-indigo-500"
                 />
               </div>
             </div>
@@ -221,7 +242,7 @@ export default function AllEquipmentPage() {
                 name="category"
                 value={filters.category}
                 onChange={handleFilterChange}
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               >
                 <option value="">All Categories</option>
                 <option value="Construction Equipment">Construction Equipment</option>
@@ -242,7 +263,7 @@ export default function AllEquipmentPage() {
                 name="rentalType"
                 value={filters.rentalType}
                 onChange={handleFilterChange}
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               >
                 <option value="">All Types</option>
                 <option value="daily">Daily</option>
@@ -261,7 +282,7 @@ export default function AllEquipmentPage() {
                 value={filters.location}
                 onChange={handleFilterChange}
                 placeholder="Enter location"
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               />
             </div>
 
@@ -277,7 +298,7 @@ export default function AllEquipmentPage() {
                 value={filters.minPrice}
                 onChange={handleFilterChange}
                 placeholder="Minimum price"
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               />
             </div>
 
@@ -293,7 +314,7 @@ export default function AllEquipmentPage() {
                 value={filters.maxPrice}
                 onChange={handleFilterChange}
                 placeholder="Maximum price"
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               />
             </div>
 
@@ -306,7 +327,7 @@ export default function AllEquipmentPage() {
                 name="availability"
                 value={filters.availability}
                 onChange={handleFilterChange}
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               >
                 <option value="">All Availability</option>
                 <option value="available">Available</option>
@@ -322,7 +343,7 @@ export default function AllEquipmentPage() {
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2.5 outline-none focus:border-indigo-500"
+                className="w-full rounded-lg border px-3 py-2.5 outline-none focus-border-indigo-500"
               >
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
@@ -372,11 +393,11 @@ export default function AllEquipmentPage() {
             <div className="py-12 text-center">
               <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
 
-              <h3 className="mt-4 font-bold text-gray-900">
+              <h3 className="mt-4 text-lg font-bold text-gray-900">
                 Unable to Load Equipment
               </h3>
 
-              <p className="mt-2 text-sm text-red-600">
+              <p className="mt-2 break-words text-sm text-gray-600">
                 {error}
               </p>
 
@@ -479,18 +500,76 @@ export default function AllEquipmentPage() {
               })}
             </div>
           )}
-        </section>
 
-        <div className="mt-6">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800"
-          >
-            <ArrowLeft size={17} />
-            Back to Home
-          </Link>
+          {/* Pagination */}
+          {total > ITEMS_PER_PAGE && (
+            <div className="mt-8 flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Page{" "}
+                <span className="font-semibold text-gray-700">
+                  {page}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-gray-700">
+                  {lastPage}
+                </span>
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={page === 1}
+                  className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} /> Previous
+                </button>
+
+                {Array.from(
+                  { length: lastPage },
+                  (_, index) => index + 1
+                ).map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setPage(num)}
+                    aria-current={page === num ? "page" : undefined}
+                    className={`min-w-9 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                      page === num
+                        ? "bg-indigo-600 text-white"
+                        : "border bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPage((p) => Math.min(lastPage, p + 1))
+                  }
+                  disabled={page === lastPage}
+                  className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+            >
+              <ArrowLeft size={17} />
+              Back to Home
+            </Link>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
   );
 }
