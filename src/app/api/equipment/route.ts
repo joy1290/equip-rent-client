@@ -18,6 +18,7 @@ let equipmentStore = [
     image: "/placeholder-equipment.jpg",
     rentalTerms: "Requires operator license and security deposit.",
     status: "Approved",
+    ownerId: "",
   },
   {
     id: "2",
@@ -34,6 +35,7 @@ let equipmentStore = [
     image: "/placeholder-equipment.jpg",
     rentalTerms: "Memory cards not included. Insurance recommended.",
     status: "Approved",
+    ownerId: "",
   },
   {
     id: "3",
@@ -50,6 +52,7 @@ let equipmentStore = [
     image: "/placeholder-equipment.jpg",
     rentalTerms: "Driver must be above 25 years with valid license.",
     status: "Approved",
+    ownerId: "",
   },
   {
     id: "4",
@@ -66,6 +69,7 @@ let equipmentStore = [
     image: "/placeholder-equipment.jpg",
     rentalTerms: "Fuel not included. Operating tutorial provided.",
     status: "Approved",
+    ownerId: "",
   },
   {
     id: "5",
@@ -82,6 +86,7 @@ let equipmentStore = [
     image: "/placeholder-equipment.jpg",
     rentalTerms: "FAA registration required. No-fly zones apply.",
     status: "Approved",
+    ownerId: "",
   },
   {
     id: "6",
@@ -98,12 +103,13 @@ let equipmentStore = [
     image: "/placeholder-equipment.jpg",
     rentalTerms: "Power requirements must be verified on-site.",
     status: "Approved",
+    ownerId: "",
   },
 ];
 
 // Helper: get current user ID from session
 async function getCurrentUserId(): Promise<string> {
-  const { data: session } = await authClient.useSession();
+  const { data } = await authClient.useSession();
   return data?.user?.id ?? "";
 }
 
@@ -117,13 +123,13 @@ export async function GET(request: Request) {
 
     // Handle "my-equipment" sub-path
     if (pathname.endsWith("/my-equipment")) {
-      const { data: session } = await authClient.useSession();
+      const { data } = await authClient.useSession();
 
-      if (!session?.user) {
+      if (!data?.user) {
         return NextResponse.json({ equipment: [] }, { status: 200 });
       }
 
-      const userId = session.user.id;
+      const userId = data.user.id;
       const items = equipmentStore.filter(
         (item) => item.ownerId === userId
       );

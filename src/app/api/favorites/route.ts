@@ -1,52 +1,38 @@
 import { NextResponse } from "next/server";
 import { authClient } from "@/lib/auth-client";
 
-// MongoDB Favorite model - using mongoose for MongoDB persistence
-// Install: npm i mongoose
-// Ensure MONGODB_URI is set in environment
-
-import mongoose from "mongoose";
-
-// In production, use a proper DB module. For now, connect on demand.
-let cachedMongoose = { conn: null, promise: null };
-
-async function connectToDatabase() {
-  if (cachedMongoose.conn) return cachedMongoose.conn;
-  if (!cachedMongoose.promise) {
-    const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/equip-rent";
-    cachedMongoose.promise = mongoose.connect(uri).then((m) => m);
-  }
-  cachedMongoose.conn = await cachedMongoose.promise;
-  return cachedMongoose.conn;
-}
-
-// Define Favorite schema and model
-async function getFavoriteModel() {
-  const conn = await connectToDatabase();
-  if (!conn.models?.Favorite) {
-    const FavoriteSchema = new mongoose.Schema({
-      userId: { type: String, required: true },
-      equipmentId: { type: String, required: true },
-      favoritedAt: { type: Date, default: Date.now },
-    });
-    conn.model("Favorite", FavoriteSchema);
-  }
-  return conn.model("Favorite");
-}
+// In-memory fallback store (for development; replace with MongoDB in production)
+let favoritesStore = [
+  // Sample favorites for testing
+  {
+    id: "1",
+    userId: "customer1",
+    equipmentId: "1",
+  },
+  {
+    id: "2",
+    userId: "customer1",
+    equipmentId: "2",
+  },
+  {
+    id: "3",
+    userId: "customer2",
+    equipmentId: "3",
+  },
+];
 
 // GET /api/favorites - Get current user's favorites
 export async function GET(request: Request) {
   try {
-    const { data: session } = await authClient.useSession();
+    const { data } = await authClient.useSession();
 
-    if (!session?.user) {
+    if (!data?.user) {
       return NextResponse.json({ favorites: [] }, { status: 200 });
     }
 
-    const Favorite = getFavoriteModel();
-    const userFavorites = await Favorite.find({ userId: session.user.id })
-      .sort({ favoritedAt: -1 })
-      .lean();
+    const userFavorites = favoritesStore.filter(
+      (f) => f.userId === data.user.id
+    );
 
     return NextResponse.json({ favorites: userFavorites }, { status: 200 });
   } catch (error) {
@@ -61,9 +47,9 @@ export async function GET(request: Request) {
 // POST /api/favorites - Add a favorite
 export async function POST(request: Request) {
   try {
-    const { data: session } = await authClient.useSession();
+    const { data } = await authClient.useSession();
 
-    if (!session?.user) {
+    if (!data?.user) {
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
@@ -80,11 +66,9 @@ export async function POST(request: Request) {
     }
 
     // Check if already favorited
-    const Favorite = getFavoriteModel();
-    const alreadyFavorited = await Favorite.findOne({
-      userId: session.user.id,
-      equipmentId,
-    });
+    const alreadyFavorited = favoritesStore.some(
+      (f) => f.userId === data.user.id && f.equipmentId === equipmentId
+    );
 
     if (alreadyFavorited) {
       return NextResponse.json(
@@ -93,12 +77,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const newFavorite = new Favorite({
-      userId: session.user.id,
+    const newFavorite = {
+      id: Date.now().toString(),
+      userId: data.user.id,
       equipmentId,
-    });
+    };
 
-    await newFavorite.save();
+    favoritesStore.push(newFavorite);
 
     return NextResponse.json(newFavorite, { status: 201 });
   } catch (error) {
@@ -113,9 +98,9 @@ export async function POST(request: Request) {
 // DELETE /api/favorites/[id] - Remove a favorite
 export async function DELETE(request: Request) {
   try {
-    const { data: session } = await authClient.useSession();
+    const { data } = await authClient.useSession();
 
-    if (!session?.user) {
+    if (!data?.user) {
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
@@ -132,14 +117,15 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Remove the favorite from MongoDB
-    const Favorite = getFavoriteModel();
-    const result = await Favorite.deleteOne({
-      userId: session.user.id,
-      equipmentId,
-    });
+    // Remove the favorite
+    const beforeLength = favoritesStore.length;
+    favoritesStore = favoritesStore.filter(
+      (f) => !(f.userId === data.user.id && f.equipmentId === equipmentId)
+    );
 
-    if (result.deletedCount === 0) {
+    const afterLength = favoritesStore.length;
+
+    if (beforeLength === afterLength) {
       return NextResponse.json(
         { error: "Favorite not found" },
         { status: 404 }
