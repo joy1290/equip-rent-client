@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Heart,
@@ -11,6 +11,8 @@ import {
   X,
   MapPin,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 interface Equipment {
@@ -28,78 +30,155 @@ interface Equipment {
   image: string;
 }
 
+/** Popular categories from the assignment. */
+const CATEGORIES = [
+  "Construction Equipment",
+  "Photography Equipment",
+  "Vehicles & Transportation",
+  "Agriculture Equipment",
+  "Electronics",
+  "Event Equipment",
+];
+
+const RENTAL_TYPES = ["Daily", "Weekly", "Monthly"];
+
+/** 9 items per page keeps the 3-column grid perfectly filled. */
+const PAGE_SIZE = 9;
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+interface Filters {
+  search: string;
+  category: string;
+  location: string;
+  rentalType: string;
+  minPrice: string;
+  maxPrice: string;
+  availability: string;
+  sort: string;
+}
+
+const emptyFilters: Filters = {
+  search: "",
+  category: "",
+  location: "",
+  rentalType: "",
+  minPrice: "",
+  maxPrice: "",
+  availability: "",
+  sort: "",
+};
+
+const inputClass =
+  "w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
 
 export default function EquipmentPage() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
 
   const [favoriteLoading, setFavoriteLoading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
-  // Search and filters
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedLocation, setSelectedLocation] = useState("All");
-  const [sortOrder, setSortOrder] = useState("default");
+  // Challenge 1: server-side search / filters / sorting
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
 
-  // Fetch equipment and favorites
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Update any filter and jump back to page 1
+  const updateFilter = <K extends keyof Filters>(
+    key: K,
+    value: Filters[K]
+  ) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+    setPage(1);
+  };
+
+  const hasActiveFilters = Object.values(filters).some(
+    (value) => value !== ""
+  );
+
+  // Fetch equipment from the server whenever filters/page change (debounced)
   useEffect(() => {
     const controller = new AbortController();
 
-    const fetchData = async () => {
-      setLoading(true);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setFetching(true);
       setError("");
 
       try {
-        const equipmentResponse = await fetch(`${API_URL}/equipment`, {
-          signal: controller.signal,
-        });
+        const params = new URLSearchParams();
 
-        const equipmentData = await equipmentResponse.json();
+        if (filters.search.trim()) {
+          params.set("search", filters.search.trim());
+        }
+        if (filters.category) {
+          params.set("category", filters.category);
+        }
+        if (filters.location.trim()) {
+          params.set("location", filters.location.trim());
+        }
+        if (filters.rentalType) {
+          params.set("rentalType", filters.rentalType);
+        }
+        if (filters.minPrice) {
+          params.set("minPrice", filters.minPrice);
+        }
+        if (filters.maxPrice) {
+          params.set("maxPrice", filters.maxPrice);
+        }
+        if (filters.availability) {
+          params.set("availability", filters.availability);
+        }
+        if (filters.sort) {
+          params.set("sort", filters.sort);
+        }
 
-        if (!equipmentResponse.ok) {
+        params.set("page", String(page));
+        params.set("limit", String(PAGE_SIZE));
+
+        const response = await fetch(
+          `${API_URL}/equipment/search/filter?${params.toString()}`,
+          { signal: controller.signal }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
           throw new Error(
-            equipmentData.message || "Failed to load equipment."
+            data.message || "Failed to load equipment."
           );
         }
 
-        if (!Array.isArray(equipmentData.equipment)) {
+        if (!Array.isArray(data.equipment)) {
           throw new Error("Invalid equipment data received from server.");
         }
 
-        setEquipment(equipmentData.equipment);
-
-        // Favorites are optional
-        try {
-          const favoriteResponse = await fetch(`${API_URL}/favorites`, {
-            credentials: "include",
-            signal: controller.signal,
-          });
-
-          if (favoriteResponse.ok) {
-            const favoriteData = await favoriteResponse.json();
-
-            setFavoriteIds(
-              (favoriteData.favorites || []).map(
-                (item: Equipment) => item._id
-              )
-            );
-          }
-        } catch (favoriteError) {
-          if (
-            favoriteError instanceof Error &&
-            favoriteError.name === "AbortError"
-          ) {
-            return;
-          }
-
-          // Continue browsing even if favorites cannot load.
-        }
+        setEquipment(data.equipment);
+        setTotal(data.total ?? data.equipment.length);
+        setPages(
+          data.pages ??
+            Math.max(
+              1,
+              Math.ceil((data.total ?? 0) / PAGE_SIZE)
+            )
+        );
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           return;
@@ -112,98 +191,52 @@ export default function EquipmentPage() {
         );
       } finally {
         if (!controller.signal.aborted) {
+          setFetching(false);
           setLoading(false);
         }
       }
-    };
-
-    fetchData();
+    }, 350);
 
     return () => {
       controller.abort();
+
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
     };
+  }, [filters, page, retryCount]);
+
+  // Favorites are optional — loaded once for the signed-in customer
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadFavorites = async () => {
+      try {
+        const response = await fetch(`${API_URL}/favorites`, {
+          credentials: "include",
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          setFavoriteIds(
+            (data.favorites || []).map((item: Equipment) => item._id)
+          );
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+
+        // Continue browsing even if favorites cannot load.
+      }
+    };
+
+    loadFavorites();
+
+    return () => controller.abort();
   }, [retryCount]);
-
-  // Dynamic categories
-  const categories = useMemo(
-    () =>
-      [...new Set(equipment.map((item) => item.category).filter(Boolean))],
-    [equipment]
-  );
-
-  // Dynamic locations
-  const locations = useMemo(
-    () =>
-      [...new Set(equipment.map((item) => item.location).filter(Boolean))],
-    [equipment]
-  );
-
-  // Search, filter and sorting
-  const filteredEquipment = useMemo(() => {
-    let result = [...equipment];
-
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase().trim();
-
-      result = result.filter((item) =>
-        [
-          item.name,
-          item.brand,
-          item.model,
-          item.category,
-          item.description,
-        ]
-          .filter(Boolean)
-          .some((value) =>
-            String(value).toLowerCase().includes(search)
-          )
-      );
-    }
-
-    if (selectedCategory !== "All") {
-      result = result.filter(
-        (item) => item.category === selectedCategory
-      );
-    }
-
-    if (selectedLocation !== "All") {
-      result = result.filter(
-        (item) => item.location === selectedLocation
-      );
-    }
-
-    if (sortOrder === "low-high") {
-      result.sort(
-        (a, b) => Number(a.rentalPrice) - Number(b.rentalPrice)
-      );
-    } else if (sortOrder === "high-low") {
-      result.sort(
-        (a, b) => Number(b.rentalPrice) - Number(a.rentalPrice)
-      );
-    }
-
-    return result;
-  }, [
-    equipment,
-    searchTerm,
-    selectedCategory,
-    selectedLocation,
-    sortOrder,
-  ]);
-
-  // Clear filters
-  const clearFilters = () => {
-    setSearchTerm("");
-    setSelectedCategory("All");
-    setSelectedLocation("All");
-    setSortOrder("default");
-  };
-
-  const hasActiveFilters =
-    searchTerm.trim() !== "" ||
-    selectedCategory !== "All" ||
-    selectedLocation !== "All" ||
-    sortOrder !== "default";
 
   // Retry fetching
   const handleRetry = () => {
@@ -211,58 +244,61 @@ export default function EquipmentPage() {
   };
 
   // Add or remove favorite
-  const handleFavorite = async (equipmentId: string) => {
-    if (favoriteLoading) return;
+  const handleFavorite = useCallback(
+    async (equipmentId: string) => {
+      if (favoriteLoading) return;
 
-    setFavoriteLoading(equipmentId);
-    setMessage("");
+      setFavoriteLoading(equipmentId);
+      setMessage("");
 
-    const isFavorite = favoriteIds.includes(equipmentId);
+      const isFavorite = favoriteIds.includes(equipmentId);
 
-    try {
-      const response = await fetch(
-        `${API_URL}/favorites/${equipmentId}`,
-        {
-          method: isFavorite ? "DELETE" : "POST",
-          credentials: "include",
+      try {
+        const response = await fetch(
+          `${API_URL}/favorites/${equipmentId}`,
+          {
+            method: isFavorite ? "DELETE" : "POST",
+            credentials: "include",
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.message || "Failed to update favorites."
+          );
         }
-      );
 
-      const data = await response.json();
+        if (isFavorite) {
+          setFavoriteIds((prev) =>
+            prev.filter((id) => id !== equipmentId)
+          );
 
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to update favorites."
+          setMessage("Removed from favorites.");
+        } else {
+          setFavoriteIds((prev) =>
+            prev.includes(equipmentId)
+              ? prev
+              : [...prev, equipmentId]
+          );
+
+          setMessage("Added to favorites successfully.");
+        }
+      } catch (err) {
+        setMessage(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again."
         );
+      } finally {
+        setFavoriteLoading(null);
       }
+    },
+    [favoriteIds, favoriteLoading]
+  );
 
-      if (isFavorite) {
-        setFavoriteIds((prev) =>
-          prev.filter((id) => id !== equipmentId)
-        );
-
-        setMessage("Removed from favorites.");
-      } else {
-        setFavoriteIds((prev) =>
-          prev.includes(equipmentId)
-            ? prev
-            : [...prev, equipmentId]
-        );
-
-        setMessage("Added to favorites successfully.");
-      }
-    } catch (err) {
-      setMessage(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again."
-      );
-    } finally {
-      setFavoriteLoading(null);
-    }
-  };
-
-  // Loading UI
+  // Loading UI (first load only)
   if (loading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
@@ -280,7 +316,7 @@ export default function EquipmentPage() {
   }
 
   // Error UI
-  if (error) {
+  if (error && equipment.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
@@ -309,6 +345,27 @@ export default function EquipmentPage() {
     );
   }
 
+  // Page numbers (first, last, current ± 1, ellipses)
+  const pageNumbers: (number | "…")[] = [];
+
+  if (pages <= 7) {
+    for (let i = 1; i <= pages; i++) pageNumbers.push(i);
+  } else {
+    pageNumbers.push(1);
+
+    const start = Math.max(2, page - 1);
+    const end = Math.min(pages - 1, page + 1);
+
+    if (start > 2) pageNumbers.push("…");
+    for (let i = start; i <= end; i++) pageNumbers.push(i);
+    if (end < pages - 1) pageNumbers.push("…");
+
+    pageNumbers.push(pages);
+  }
+
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
+
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-12 sm:px-8">
       <div className="mx-auto max-w-7xl">
@@ -324,7 +381,7 @@ export default function EquipmentPage() {
           </p>
         </div>
 
-        {/* Search and Filters */}
+        {/* Search and Filters — all evaluated on the server */}
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex items-center gap-2">
             <SlidersHorizontal className="text-indigo-600" size={21} />
@@ -334,9 +391,9 @@ export default function EquipmentPage() {
             </h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 
-            {/* Search */}
+            {/* Search by name / category / location */}
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Search Equipment
@@ -350,9 +407,11 @@ export default function EquipmentPage() {
 
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search name, brand..."
+                  value={filters.search}
+                  onChange={(e) =>
+                    updateFilter("search", e.target.value)
+                  }
+                  placeholder="Name, category, location..."
                   className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
@@ -365,13 +424,15 @@ export default function EquipmentPage() {
               </label>
 
               <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500"
+                value={filters.category}
+                onChange={(e) =>
+                  updateFilter("category", e.target.value)
+                }
+                className={inputClass}
               >
-                <option value="All">All Categories</option>
+                <option value="">All Categories</option>
 
-                {categories.map((category) => (
+                {CATEGORIES.map((category) => (
                   <option key={category} value={category}>
                     {category}
                   </option>
@@ -385,81 +446,159 @@ export default function EquipmentPage() {
                 Location
               </label>
 
-              <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-indigo-500"
-              >
-                <option value="All">All Locations</option>
+              <input
+                type="text"
+                value={filters.location}
+                onChange={(e) =>
+                  updateFilter("location", e.target.value)
+                }
+                placeholder="e.g. Dhaka"
+                className={inputClass}
+              />
+            </div>
 
-                {locations.map((location) => (
-                  <option key={location} value={location}>
-                    {location}
+            {/* Rental Type */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Rental Type
+              </label>
+
+              <select
+                value={filters.rentalType}
+                onChange={(e) =>
+                  updateFilter("rentalType", e.target.value)
+                }
+                className={inputClass}
+              >
+                <option value="">All Rental Types</option>
+
+                {RENTAL_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Sorting */}
+            {/* Price Range */}
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
-                Sort By Price
+                Price Range (৳)
               </label>
 
-              <div className="relative">
-                <ArrowUpDown
-                  size={17}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={filters.minPrice}
+                  onChange={(e) =>
+                    updateFilter("minPrice", e.target.value)
+                  }
+                  placeholder="Min"
+                  className={inputClass}
                 />
 
-                <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-500"
-                >
-                  <option value="default">Default Sorting</option>
-                  <option value="low-high">Price: Low to High</option>
-                  <option value="high-low">Price: High to Low</option>
-                </select>
+                <span className="text-gray-400">–</span>
+
+                <input
+                  type="number"
+                  min="0"
+                  value={filters.maxPrice}
+                  onChange={(e) =>
+                    updateFilter("maxPrice", e.target.value)
+                  }
+                  placeholder="Max"
+                  className={inputClass}
+                />
               </div>
+            </div>
+
+            {/* Availability */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Availability
+              </label>
+
+              <select
+                value={filters.availability}
+                onChange={(e) =>
+                  updateFilter("availability", e.target.value)
+                }
+                className={inputClass}
+              >
+                <option value="">All Equipment</option>
+                <option value="available">Available Only</option>
+                <option value="unavailable">Out of Stock</option>
+              </select>
             </div>
           </div>
 
-          {/* Filter Bottom */}
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <p className="text-sm text-gray-600">
-              Showing{" "}
-              <span className="font-bold text-indigo-600">
-                {filteredEquipment.length}
-              </span>{" "}
-              of {equipment.length} equipment
-            </p>
+          {/* Sorting — handled by MongoDB on the server */}
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t pt-4">
+            <div className="w-full sm:w-64">
+              <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                <ArrowUpDown size={15} className="text-indigo-600" />
+                Sort By
+              </label>
 
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+              <select
+                value={filters.sort}
+                onChange={(e) => updateFilter("sort", e.target.value)}
+                className={inputClass}
               >
-                <X size={17} />
-                Clear Filters
-              </button>
-            )}
+                <option value="">Recently Added</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <p className="text-sm text-gray-600">
+                Showing{" "}
+                <span className="font-bold text-indigo-600">
+                  {from}–{to}
+                </span>{" "}
+                of {total} equipment
+              </p>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                >
+                  <X size={17} />
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Favorite Message */}
-        {message && (
+        {/* Favorite / error message */}
+        {(message || (error && equipment.length > 0)) && (
           <div
             role="status"
-            className="mb-6 rounded-lg bg-indigo-50 p-3 text-center text-sm text-indigo-700"
+            className={`mb-6 rounded-lg p-3 text-center text-sm ${
+              error
+                ? "bg-red-50 text-red-600"
+                : "bg-indigo-50 text-indigo-700"
+            }`}
           >
-            {message}
+            {error || message}
+          </div>
+        )}
+
+        {/* Updating indicator while refetching */}
+        {fetching && (
+          <div className="mb-4 flex items-center justify-center gap-2 text-sm text-indigo-600">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+            Updating results...
           </div>
         )}
 
         {/* Equipment Cards */}
-        {filteredEquipment.length === 0 ? (
+        {equipment.length === 0 && !fetching ? (
           <div className="rounded-xl bg-white p-10 text-center shadow-sm">
             <Search size={42} className="mx-auto text-gray-300" />
 
@@ -480,8 +619,12 @@ export default function EquipmentPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredEquipment.map((item) => {
+          <div
+            className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-opacity ${
+              fetching ? "opacity-60" : "opacity-100"
+            }`}
+          >
+            {equipment.map((item) => {
               const isFavorite = favoriteIds.includes(item._id);
 
               return (
@@ -526,9 +669,21 @@ export default function EquipmentPage() {
                       />
                     </button>
 
-                    {/* Category */}
+                    {/* Category + Availability */}
                     <span className="absolute bottom-3 left-3 rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-600 shadow">
                       {item.category}
+                    </span>
+
+                    <span
+                      className={`absolute bottom-3 right-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow ${
+                        item.availableQuantity > 0
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {item.availableQuantity > 0
+                        ? "Available"
+                        : "Out of Stock"}
                     </span>
                   </div>
 
@@ -578,6 +733,62 @@ export default function EquipmentPage() {
               );
             })}
           </div>
+        )}
+
+        {/* Pagination — optional requirement */}
+        {pages > 1 && (
+          <nav
+            aria-label="Equipment pagination"
+            className="mt-10 flex flex-wrap items-center justify-center gap-2"
+          >
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || fetching}
+              aria-label="Previous page"
+              className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft size={16} />
+              Prev
+            </button>
+
+            {pageNumbers.map((number, index) =>
+              number === "…" ? (
+                <span
+                  key={`gap-${index}`}
+                  className="px-2 text-gray-400"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={number}
+                  type="button"
+                  onClick={() => setPage(number)}
+                  disabled={fetching}
+                  aria-current={page === number ? "page" : undefined}
+                  className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed ${
+                    page === number
+                      ? "bg-indigo-600 text-white"
+                      : "border bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {number}
+                </button>
+              )
+            )}
+
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+              disabled={page === pages || fetching}
+              aria-label="Next page"
+              className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </nav>
         )}
       </div>
     </main>
