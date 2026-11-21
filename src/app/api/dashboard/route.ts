@@ -111,8 +111,12 @@ let usersStore = [
 ];
 
 // GET /api/dashboard/* - Dispatch based on pathname
+// This route uses request.url for path routing, so it must be dynamic
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
+    // Use the searchParams from the incoming request
     const url = new URL(request.url);
     const pathname = url.pathname; // /api/dashboard/stats, /api/dashboard/owner, /api/dashboard/admin/all-rentals
 
