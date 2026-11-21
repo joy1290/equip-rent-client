@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,20 +7,40 @@ import {
   CalendarDays,
   Wallet,
   Clock,
+  Search,
+  User,
   ArrowRight,
   Loader2,
 } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
 
-import OwnerAnalytics from "@/components/dashboard/owner-analytics";
+import AdminAnalytics from "@/components/dashboard/admin-analytics";
 
 interface Equipment {
   _id: string;
   name: string;
-  status: string;
+  description: string;
+  category: string;
+  location: string;
+  rentalPrice: number;
+  rentalType: string;
+  availableQuantity: number;
+  condition: string;
+  brand: string;
+  model: string;
+  image: string;
+  rentalTerms: string;
+  status: "Pending" | "Approved" | "Rejected";
+  ownerId?: string;
 }
 
 interface Booking {
   _id: string;
+  equipmentId: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  quantity: number;
   totalAmount: number;
   bookingStatus: string;
   paymentStatus: string;
@@ -35,11 +54,41 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+
+const dashboardCards = [
+  {
+    title: "Add Equipment",
+    description: "Add new equipment for rent.",
+    href: "/dashboard/owner/add-equipment",
+    icon: Package,
+  },
+  {
+    title: "My Bookings",
+    description: "Review and manage booking requests.",
+    href: "/dashboard/owner/bookings",
+    icon: CalendarDays,
+  },
+  {
+    title: "Browse Equipment",
+    description: "Explore available rental equipment.",
+    href: "/equipment",
+    icon: Search,
+  },
+  {
+    title: "My Profile",
+    description: "Update your profile information.",
+    href: "/dashboard/owner/profile",
+    icon: User,
+  },
+];
+
 export default function OwnerDashboard() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { data: session } = useSession();
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -48,12 +97,12 @@ export default function OwnerDashboard() {
         setError("");
 
         const [equipmentRes, bookingRes] = await Promise.all([
-         fetch(`${process.env.NEXT_PUBLIC_API_URL}/equipment/my-equipment`, {
-  credentials: "include",
-}),
-fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
-  credentials: "include",
-}),
+          fetch(`${API_URL}/equipment/my-equipment`, {
+            credentials: "include",
+          }),
+          fetch(`${API_URL}/bookings/owner-bookings`, {
+            credentials: "include",
+          }),
         ]);
 
         if (!equipmentRes.ok || !bookingRes.ok) {
@@ -193,9 +242,9 @@ fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
           })}
         </div>
 
-        {/* Business Analytics (Challenge 3) */}
+        {/* Business Analytics */}
         <section className="mt-8">
-          <OwnerAnalytics />
+          <AdminAnalytics />
         </section>
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
@@ -251,8 +300,9 @@ fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
                 <thead>
                   <tr className="border-b text-gray-500">
                     <th className="py-3 pr-4">Booking ID</th>
+                    <th className="py-3 pr-4">Equipment</th>
                     <th className="py-3 pr-4">Amount</th>
-                    <th className="py-3 pr-4">Booking Status</th>
+                    <th className="py-3">Booking Status</th>
                     <th className="py-3">Payment</th>
                   </tr>
                 </thead>
@@ -268,10 +318,16 @@ fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
                       </td>
 
                       <td className="py-4 pr-4">
-                        ৳{booking.totalAmount.toLocaleString("en-BD")}
+                        {equipment
+                          .find((eq) => eq._id === booking.equipmentId)
+                          ?.name || "Unknown"}
                       </td>
 
                       <td className="py-4 pr-4">
+                        ৳{booking.totalAmount.toLocaleString("en-BD")}
+                      </td>
+
+                      <td className="py-4">
                         {booking.bookingStatus}
                       </td>
 
@@ -284,15 +340,15 @@ fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
               </table>
             </div>
           )}
-
-          <Link
-            href="/dashboard/owner/bookings"
-            className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
-          >
-            View All Bookings
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
+
+        <Link
+          href="/dashboard/owner/bookings"
+          className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+        >
+          View All Bookings
+          <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
     </div>
   );

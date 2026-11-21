@@ -1,22 +1,38 @@
-
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  Heart,
+  HardHat,
+  Camera,
+  Car,
+  Tractor,
+  Cpu,
+  PartyPopper,
+  ShieldCheck,
+  Package,
+  CalendarDays,
+  CreditCard,
   Search,
-  SlidersHorizontal,
-  ArrowUpDown,
-  X,
-  MapPin,
+  Grid,
+  Layout,
+  Sun,
+  Moon,
+  Loader2,
+  XCircle,
+  CheckCircle,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
+  AlertCircle,
+  MapPin,
+  ArrowLeft,
 } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+
+const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/equipment`;
 
 interface Equipment {
-  _id: string;
+  id: string;
   name: string;
   description: string;
   category: string;
@@ -28,768 +44,425 @@ interface Equipment {
   brand: string;
   model: string;
   image: string;
+  rentalTerms: string;
+  status: "Pending" | "Approved" | "Rejected";
 }
 
-/** Popular categories from the assignment. */
-const CATEGORIES = [
-  "Construction Equipment",
-  "Photography Equipment",
-  "Vehicles & Transportation",
-  "Agriculture Equipment",
-  "Electronics",
-  "Event Equipment",
-];
-
-const RENTAL_TYPES = ["Daily", "Weekly", "Monthly"];
-
-/** 9 items per page keeps the 3-column grid perfectly filled. */
-const PAGE_SIZE = 9;
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-interface Filters {
-  search: string;
-  category: string;
-  location: string;
-  rentalType: string;
-  minPrice: string;
-  maxPrice: string;
-  availability: string;
-  sort: string;
-}
-
-const emptyFilters: Filters = {
-  search: "",
-  category: "",
-  location: "",
-  rentalType: "",
-  minPrice: "",
-  maxPrice: "",
-  availability: "",
-  sort: "",
-};
-
-const inputClass =
-  "w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
-
-export default function EquipmentPage() {
+export default function AllEquipmentPage() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-
   const [loading, setLoading] = useState(true);
-  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
 
-  const [favoriteLoading, setFavoriteLoading] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
+  const [filters, setFilters] = useState({
+    search: "",
+    category: "",
+    rentalType: "",
+    minPrice: "",
+    maxPrice: "",
+    availability: "",
+  });
 
-  // Challenge 1: server-side search / filters / sorting
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(1);
+  const [sort, setSort] = useState({
+    by: "priceLow",
+    order: "asc",
+  });
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // Update any filter and jump back to page 1
-  const updateFilter = <K extends keyof Filters>(
-    key: K,
-    value: Filters[K]
-  ) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-  };
-
-  const clearFilters = () => {
-    setFilters(emptyFilters);
-    setPage(1);
-  };
-
-  const hasActiveFilters = Object.values(filters).some(
-    (value) => value !== ""
-  );
-
-  // Fetch equipment from the server whenever filters/page change (debounced)
+  // Initialize filters and sort from URL search params
   useEffect(() => {
-    const controller = new AbortController();
+    const params = {
+      search: searchParams.get("search") || "",
+      category: searchParams.get("category") || "",
+      rentalType: searchParams.get("rentalType") || "",
+      minPrice: searchParams.get("minPrice") || "",
+      maxPrice: searchParams.get("maxPrice") || "",
+      availability: searchParams.get("availability") || "",
+    };
+    setFilters(params);
 
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
+    const sortBy = searchParams.get("sortBy") || "priceLow";
+    const sortOrder = searchParams.get("sortOrder") || "asc";
+    setSort({ by: sortBy, order: sortOrder });
+  }, [searchParams]);
+
+  // Fetch equipment from API with filters and sort
+  const fetchEquipment = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "20",
+        search: filters.search,
+        category: filters.category,
+        rentalType: filters.rentalType,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+        availability: filters.availability,
+        sortBy: sort.by,
+        sortOrder: sort.order,
+      });
+
+      const response = await fetch(`${API_URL}?${params}`, {
+        cache: "no-store",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to load equipment.");
+      }
+
+      setEquipment(result.equipment);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
+  };
 
-    debounceRef.current = setTimeout(async () => {
-      setFetching(true);
-      setError("");
-
-      try {
-        const params = new URLSearchParams();
-
-        if (filters.search.trim()) {
-          params.set("search", filters.search.trim());
-        }
-        if (filters.category) {
-          params.set("category", filters.category);
-        }
-        if (filters.location.trim()) {
-          params.set("location", filters.location.trim());
-        }
-        if (filters.rentalType) {
-          params.set("rentalType", filters.rentalType);
-        }
-        if (filters.minPrice) {
-          params.set("minPrice", filters.minPrice);
-        }
-        if (filters.maxPrice) {
-          params.set("maxPrice", filters.maxPrice);
-        }
-        if (filters.availability) {
-          params.set("availability", filters.availability);
-        }
-        if (filters.sort) {
-          params.set("sort", filters.sort);
-        }
-
-        params.set("page", String(page));
-        params.set("limit", String(PAGE_SIZE));
-
-        const response = await fetch(
-          `${API_URL}/equipment/search/filter?${params.toString()}`,
-          { signal: controller.signal }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message || "Failed to load equipment."
-          );
-        }
-
-        if (!Array.isArray(data.equipment)) {
-          throw new Error("Invalid equipment data received from server.");
-        }
-
-        setEquipment(data.equipment);
-        setTotal(data.total ?? data.equipment.length);
-        setPages(
-          data.pages ??
-            Math.max(
-              1,
-              Math.ceil((data.total ?? 0) / PAGE_SIZE)
-            )
-        );
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          return;
-        }
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Unable to load equipment. Please try again."
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setFetching(false);
-          setLoading(false);
-        }
-      }
-    }, 350);
-
-    return () => {
-      controller.abort();
-
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [filters, page, retryCount]);
-
-  // Favorites are optional — loaded once for the signed-in customer
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadFavorites = async () => {
-      try {
-        const response = await fetch(`${API_URL}/favorites`, {
-          credentials: "include",
-          signal: controller.signal,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-
-          setFavoriteIds(
-            (data.favorites || []).map((item: Equipment) => item._id)
-          );
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          return;
-        }
-
-        // Continue browsing even if favorites cannot load.
-      }
-    };
-
-    loadFavorites();
-
-    return () => controller.abort();
-  }, [retryCount]);
-
-  // Retry fetching
   const handleRetry = () => {
     setRetryCount((prev) => prev + 1);
   };
 
-  // Add or remove favorite
-  const handleFavorite = useCallback(
-    async (equipmentId: string) => {
-      if (favoriteLoading) return;
+  // Handle filter changes
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const name = e.target.name as keyof typeof filters;
+    setFilters({ ...filters, [name]: e.target.value });
+    // Update URL search params
+    const params = new URLSearchParams();
+    if (filters.search) params.set("search", filters.search);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.rentalType) params.set("rentalType", filters.rentalType);
+    if (filters.minPrice) params.set("minPrice", filters.minPrice);
+    if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+    if (filters.availability) params.set("availability", filters.availability);
+    if (sort.by) params.set("sortBy", sort.by);
+    if (sort.order) params.set("sortOrder", sort.order);
+    router.replace(`/equipment?${params.toString()}`);
+  };
 
-      setFavoriteLoading(equipmentId);
-      setMessage("");
+  // Handle sort changes
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const by = e.target.value;
+    setSort({ by, order: sort.order === "asc" ? "desc" : "asc" });
+    const params = new URLSearchParams();
+    params.set("sortBy", by);
+    params.set("sortOrder", sort.order === "asc" ? "desc" : "asc");
+    if (filters.search) params.set("search", filters.search);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.rentalType) params.set("rentalType", filters.rentalType);
+    if (filters.minPrice) params.set("minPrice", filters.minPrice);
+    if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+    if (filters.availability) params.set("availability", filters.availability);
+    router.replace(`/equipment?${params.toString()}`);
+  };
 
-      const isFavorite = favoriteIds.includes(equipmentId);
-
-      try {
-        const response = await fetch(
-          `${API_URL}/favorites/${equipmentId}`,
-          {
-            method: isFavorite ? "DELETE" : "POST",
-            credentials: "include",
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message || "Failed to update favorites."
-          );
-        }
-
-        if (isFavorite) {
-          setFavoriteIds((prev) =>
-            prev.filter((id) => id !== equipmentId)
-          );
-
-          setMessage("Removed from favorites.");
-        } else {
-          setFavoriteIds((prev) =>
-            prev.includes(equipmentId)
-              ? prev
-              : [...prev, equipmentId]
-          );
-
-          setMessage("Added to favorites successfully.");
-        }
-      } catch (err) {
-        setMessage(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong. Please try again."
-        );
-      } finally {
-        setFavoriteLoading(null);
-      }
-    },
-    [favoriteIds, favoriteLoading]
-  );
-
-  // Loading UI (first load only)
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
-
-        <p className="mt-5 text-lg font-semibold text-gray-700">
-          Loading Equipment...
-        </p>
-
-        <p className="mt-2 text-sm text-gray-500">
-          Please wait while we fetch available equipment.
-        </p>
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <Loader2 className="mr-2 animate-spin text-blue-600" />
+        <span className="text-gray-600">Loading equipment...</span>
       </div>
     );
   }
 
-  // Error UI
-  if (error && equipment.length === 0) {
+  if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
-            <X size={30} />
-          </div>
-
-          <h2 className="mt-5 text-2xl font-bold text-gray-900">
-            Something Went Wrong!
-          </h2>
-
-          <p className="mt-3 text-sm text-gray-600">
-            {error}
-          </p>
-
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white transition hover:bg-indigo-700"
-          >
-            <RefreshCw size={18} />
-            Try Again
-          </button>
-        </div>
+      <div className="rounded-xl border border-red-200 bg-white p-6 text-center sm:p-10">
+        <AlertCircle size={38} className="mx-auto text-red-500" />
+        <h3 className="mt-4 text-lg font-bold text-gray-900">Unable to Load Equipment</h3>
+        <p className="mt-2 break-words text-sm text-gray-600">{error}</p>
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+        >
+          <RefreshCw size={17} /> Try Again
+        </button>
       </div>
     );
   }
-
-  // Page numbers (first, last, current ± 1, ellipses)
-  const pageNumbers: (number | "…")[] = [];
-
-  if (pages <= 7) {
-    for (let i = 1; i <= pages; i++) pageNumbers.push(i);
-  } else {
-    pageNumbers.push(1);
-
-    const start = Math.max(2, page - 1);
-    const end = Math.min(pages - 1, page + 1);
-
-    if (start > 2) pageNumbers.push("…");
-    for (let i = start; i <= end; i++) pageNumbers.push(i);
-    if (end < pages - 1) pageNumbers.push("…");
-
-    pageNumbers.push(pages);
-  }
-
-  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(page * PAGE_SIZE, total);
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-12 sm:px-8">
+    <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 lg:py-10">
       <div className="mx-auto max-w-7xl">
 
-        {/* Header */}
-        <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 md:text-4xl">
-            Explore Equipment
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            All Equipment
           </h1>
 
-          <p className="mt-3 text-gray-600">
-            Find the right equipment for your next project.
+          <p className="mt-2 text-sm text-gray-600">
+            Browse and search our available equipment inventory
           </p>
         </div>
 
-        {/* Search and Filters — all evaluated on the server */}
-        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-5 flex items-center gap-2">
-            <SlidersHorizontal className="text-indigo-600" size={21} />
-
-            <h2 className="text-lg font-bold text-gray-900">
-              Search & Filters
-            </h2>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-
-            {/* Search by name / category / location */}
+        {/* Search and Filters Section */}
+        <section className="mb-8 rounded-xl border bg-white p-6 shadow-sm sm:p-8">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            
+            {/* Search */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Search Equipment
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                Search by name or location
               </label>
-
-              <div className="relative">
-                <Search
-                  size={19}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) =>
-                    updateFilter("search", e.target.value)
-                  }
-                  placeholder="Name, category, location..."
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-            </div>
-
-            {/* Category */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Category
-              </label>
-
-              <select
-                value={filters.category}
-                onChange={(e) =>
-                  updateFilter("category", e.target.value)
-                }
-                className={inputClass}
-              >
-                <option value="">All Categories</option>
-
-                {CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Location */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Location
-              </label>
-
               <input
                 type="text"
-                value={filters.location}
-                onChange={(e) =>
-                  updateFilter("location", e.target.value)
-                }
-                placeholder="e.g. Dhaka"
-                className={inputClass}
+                name="search"
+                value={filters.search}
+                onChange={handleFilterChange}
+                placeholder="Equipment name, location..."
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                aria-label="Search equipment"
               />
             </div>
 
-            {/* Rental Type */}
+            {/* Category Filter */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                Category
+              </label>
+              <select
+                name="category"
+                value={filters.category}
+                onChange={handleFilterChange}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                aria-label="Filter by category"
+              >
+                <option value="">All Categories</option>
+                <option value="Construction Equipment">Construction Equipment</option>
+                <option value="Photography Equipment">Photography Equipment</option>
+                <option value="Vehicles & Transportation">Vehicles & Transportation</option>
+                <option value="Agriculture Equipment">Agriculture Equipment</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Event Equipment">Event Equipment</option>
+              </select>
+            </div>
+
+            {/* Rental Type Filter */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Rental Type
               </label>
-
               <select
+                name="rentalType"
                 value={filters.rentalType}
-                onChange={(e) =>
-                  updateFilter("rentalType", e.target.value)
-                }
-                className={inputClass}
+                onChange={handleFilterChange}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                aria-label="Filter by rental type"
               >
-                <option value="">All Rental Types</option>
-
-                {RENTAL_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
+                <option value="">All Types</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
               </select>
             </div>
 
             {/* Price Range */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Price Range (৳)
               </label>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  value={filters.minPrice}
-                  onChange={(e) =>
-                    updateFilter("minPrice", e.target.value)
-                  }
-                  placeholder="Min"
-                  className={inputClass}
-                />
-
-                <span className="text-gray-400">–</span>
-
-                <input
-                  type="number"
-                  min="0"
-                  value={filters.maxPrice}
-                  onChange={(e) =>
-                    updateFilter("maxPrice", e.target.value)
-                  }
-                  placeholder="Max"
-                  className={inputClass}
-                />
-              </div>
+              <input
+                type="number"
+                name="minPrice"
+                value={filters.minPrice}
+                onChange={handleFilterChange}
+                placeholder="Min"
+                className="w-30 rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 sm:w-48"
+                aria-label="Minimum price"
+              />
+              <span className="mx-2 text-sm text-gray-500">to</span>
+              <input
+                type="number"
+                name="maxPrice"
+                value={filters.maxPrice}
+                onChange={handleFilterChange}
+                placeholder="Max"
+                className="w-30 rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 sm:w-48"
+                aria-label="Maximum price"
+              />
             </div>
 
             {/* Availability */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Availability
               </label>
-
               <select
+                name="availability"
                 value={filters.availability}
-                onChange={(e) =>
-                  updateFilter("availability", e.target.value)
-                }
-                className={inputClass}
+                onChange={handleFilterChange}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                aria-label="Filter by availability"
               >
-                <option value="">All Equipment</option>
-                <option value="available">Available Only</option>
-                <option value="unavailable">Out of Stock</option>
+                <option value="">All Availability</option>
+                <option value="in-stock">In Stock</option>
               </select>
             </div>
-          </div>
 
-          {/* Sorting — handled by MongoDB on the server */}
-          <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t pt-4">
-            <div className="w-full sm:w-64">
-              <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                <ArrowUpDown size={15} className="text-indigo-600" />
+            {/* Sort */}
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
                 Sort By
               </label>
-
               <select
-                value={filters.sort}
-                onChange={(e) => updateFilter("sort", e.target.value)}
-                className={inputClass}
+                name="sort"
+                value={sort.by}
+                onChange={handleSortChange}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                aria-label="Sort by"
               >
-                <option value="">Recently Added</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
+                <option value="priceLow">Price: Low to High</option>
+                <option value="priceHigh">Price: High to Low</option>
+                <option value="recentlyAdded">Recently Added</option>
               </select>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <p className="text-sm text-gray-600">
-                Showing{" "}
-                <span className="font-bold text-indigo-600">
-                  {from}–{to}
-                </span>{" "}
-                of {total} equipment
-              </p>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                >
-                  <X size={17} />
-                  Clear Filters
-                </button>
-              )}
+            {/* Apply Button */}
+            <div className="flex items-center gap-2 sm:col-span-2">
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  if (filters.search) params.set("search", filters.search);
+                  if (filters.category) params.set("category", filters.category);
+                  if (filters.rentalType) params.set("rentalType", filters.rentalType);
+                  if (filters.minPrice) params.set("minPrice", filters.minPrice);
+                  if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+                  if (filters.availability) params.set("availability", filters.availability);
+                  if (sort.by) params.set("sortBy", sort.by);
+                  if (sort.order) params.set("sortOrder", sort.order);
+                  router.replace(`/equipment?${params.toString()}`);
+                }}
+                className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Apply Filters
+              </button>
             </div>
+
           </div>
-        </div>
+        </section>
 
-        {/* Favorite / error message */}
-        {(message || (error && equipment.length > 0)) && (
-          <div
-            role="status"
-            className={`mb-6 rounded-lg p-3 text-center text-sm ${
-              error
-                ? "bg-red-50 text-red-600"
-                : "bg-indigo-50 text-indigo-700"
-            }`}
-          >
-            {error || message}
-          </div>
-        )}
-
-        {/* Updating indicator while refetching */}
-        {fetching && (
-          <div className="mb-4 flex items-center justify-center gap-2 text-sm text-indigo-600">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
-            Updating results...
-          </div>
-        )}
-
-        {/* Equipment Cards */}
-        {equipment.length === 0 && !fetching ? (
-          <div className="rounded-xl bg-white p-10 text-center shadow-sm">
-            <Search size={42} className="mx-auto text-gray-300" />
-
-            <h2 className="mt-4 text-xl font-semibold text-gray-800">
-              No Equipment Found
-            </h2>
-
-            <p className="mt-2 text-gray-500">
-              Try changing your search or filter options.
-            </p>
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="mt-5 rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-700"
-            >
-              Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div
-            className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-opacity ${
-              fetching ? "opacity-60" : "opacity-100"
-            }`}
-          >
-            {equipment.map((item) => {
-              const isFavorite = favoriteIds.includes(item._id);
-
-              return (
+        {/* Equipment Grid */}
+        <section className="bg-white rounded-2xl overflow-shadow p-6 sm:p-8 lg:p-10">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+              <p className="mt-4 text-sm font-medium text-gray-600">Loading equipment...</p>
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-200 bg-white p-6 text-center sm:p-10">
+              <AlertCircle size={38} className="mx-auto text-red-500" />
+              <h3 className="mt-4 text-lg font-bold text-gray-900">Unable to Load Equipment</h3>
+              <p className="mt-2 break-words text-sm text-gray-600">{error}</p>
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              >
+                <RefreshCw size={17} /> Try Again
+              </button>
+            </div>
+          ) : equipment.length === 0 ? (
+            <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
+              <Package size={48} className="mx-auto text-gray-300" />
+              <h3 className="mt-4 font-semibold text-gray-800">No Equipment Available</h3>
+              <p className="mt-2 text-sm text-gray-500">
+                No approved equipment matches your filters.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {equipment.map((item) => (
                 <div
-                  key={item._id}
-                  className="overflow-hidden rounded-xl bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                  key={item.id}
+                  className="group rounded-2xl border bg-white shadow-sm overflow-hidden transition hover:-translate-y-1 hover:shadow-lg"
                 >
-                  {/* Image */}
-                  <div className="relative h-56 overflow-hidden bg-gray-100">
+                  {/* Equipment Image */}
+                  <div className="relative h-52 bg-gray-100 overflow-hidden">
                     {item.image ? (
                       <img
                         src={item.image}
                         alt={item.name}
                         loading="lazy"
-                        className="h-full w-full object-cover transition duration-300 hover:scale-105"
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                       />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-gray-400">
-                        No Image Available
+                      <div className="flex h-full items-center justify-center">
+                        <Package className="h-14 w-14 text-gray-400" />
                       </div>
                     )}
-
-                    {/* Favorite Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleFavorite(item._id)}
-                      disabled={favoriteLoading === item._id}
-                      aria-label={
-                        isFavorite
-                          ? "Remove from favorites"
-                          : "Add to favorites"
-                      }
-                      className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md transition hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Heart
-                        size={21}
-                        className={
-                          isFavorite
-                            ? "fill-red-500 text-red-500"
-                            : "text-gray-600"
-                        }
-                      />
-                    </button>
-
-                    {/* Category + Availability */}
-                    <span className="absolute bottom-3 left-3 rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-600 shadow">
+                    <span className="absolute left-3 top-3 max-w-[80%] truncate rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-700 shadow sm:left-4 sm:top-4">
                       {item.category}
-                    </span>
-
-                    <span
-                      className={`absolute bottom-3 right-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow ${
-                        item.availableQuantity > 0
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-600"
-                      }`}
-                    >
-                      {item.availableQuantity > 0
-                        ? "Available"
-                        : "Out of Stock"}
                     </span>
                   </div>
 
-                  {/* Card Details */}
-                  <div className="p-5">
-                    <h2 className="text-xl font-bold text-gray-900">
+                  <div className="p-5 sm:p-6">
+                    <h3 className="truncate text-lg font-bold text-gray-900 sm:text-xl">
                       {item.name}
-                    </h2>
+                    </h3>
 
-                    <p className="mt-2 text-sm text-gray-500">
+                    <p className="mt-1 truncate text-sm text-gray-500">
                       {item.brand} {item.model}
                     </p>
 
-                    <p className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-                      <MapPin size={16} className="text-indigo-500" />
-                      {item.location}
-                    </p>
+                    <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                      <MapPin size={16} className="shrink-0" />
+                      <span className="truncate">{item.location}</span>
+                    </div>
 
-                    <div className="mt-4 flex items-center justify-between border-t pt-4">
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          Rental Price
-                        </p>
-
-                        <p className="text-xl font-bold text-indigo-600">
+                    <div className="mt-3 flex flex-wrap items-end justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs text-gray-500">Rental Price</p>
+                        <p className="text-lg font-bold text-indigo-600 sm:text-xl">
                           ৳{Number(item.rentalPrice).toLocaleString("en-BD")}
-                          <span className="text-sm font-normal text-gray-500">
-                            /{item.rentalType}
-                          </span>
+                          <span className="text-xs font-normal text-gray-500">/{item.rentalType}</span>
                         </p>
                       </div>
 
-                      <span className="text-xs text-gray-500">
-                        Available: {item.availableQuantity}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/equipment/${item.id}`)}
+                        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700 sm:px-4 sm:text-sm"
+                        aria-details="View details for {item.name}"
+                      >
+                        View Details
+                      </button>
                     </div>
-
-                    {/* Details Button */}
-                    <Link
-                      href={`/equipment/${item._id}`}
-                      className="mt-5 block rounded-lg bg-indigo-600 px-4 py-3 text-center font-semibold text-white transition hover:bg-indigo-700"
-                    >
-                      View Details
-                    </Link>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
 
-        {/* Pagination — optional requirement */}
-        {pages > 1 && (
-          <nav
-            aria-label="Equipment pagination"
-            className="mt-10 flex flex-wrap items-center justify-center gap-2"
-          >
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1 || fetching}
-              aria-label="Previous page"
-              className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <ChevronLeft size={16} />
-              Prev
-            </button>
+          {/* Pagination */}
+          {equipment.length > 0 && (
+            <div className="mt-6 text-center">
+              <Link
+                href="/equipment"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-600 px-6 py-3 font-semibold text-indigo-600 transition hover:bg-indigo-600 hover:text-white sm:w-auto"
+              >
+                ← Back to All Equipment
+                <ArrowLeft size={18} />
+              </Link>
+            </div>
+          )}
+        </section>
 
-            {pageNumbers.map((number, index) =>
-              number === "…" ? (
-                <span
-                  key={`gap-${index}`}
-                  className="px-2 text-gray-400"
-                >
-                  …
-                </span>
-              ) : (
-                <button
-                  key={number}
-                  type="button"
-                  onClick={() => setPage(number)}
-                  disabled={fetching}
-                  aria-current={page === number ? "page" : undefined}
-                  className={`min-w-10 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed ${
-                    page === number
-                      ? "bg-indigo-600 text-white"
-                      : "border bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {number}
-                </button>
-              )
-            )}
-
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              disabled={page === pages || fetching}
-              aria-label="Next page"
-              className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next
-              <ChevronRight size={16} />
-            </button>
-          </nav>
-        )}
       </div>
     </main>
   );

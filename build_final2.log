@@ -1,0 +1,21 @@
+﻿Γû▓ Next.js 16.4.6 (Turbopack)
+- Environments: .env
+Γ£ô Running next.config.ts took 371ms
+- Cache Components enabled
+- Partial Prefetching enabled
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 19.5s
+  Running TypeScript ...
+src/components/dashboard/owner-analytics.tsx(13,29): error TS2304: Cannot find name 'useSession'.
+src/components/dashboard/owner-analytics.tsx(54,10): error TS2304: Cannot find name 'Loader2'.
+src/components/dashboard/owner-analytics.tsx(71,39): error TS2322: Type '"300"' is not assignable to type 'number | `${number}%` | undefined'.
+src/components/dashboards/admin-analytics.tsx(111,16): error TS2304: Cannot find name 'RechartsLegend'.
+node.exe : Failed to type check.
+At C:\Node.js\equip-rent-client\node_modules\.bin\next.ps1:24 char:5
++     & "node$exe"  "$basedir/../next/dist/bin/next" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Failed to type check.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+

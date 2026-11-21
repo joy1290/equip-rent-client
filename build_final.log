@@ -1,0 +1,90 @@
+﻿Γû▓ Next.js 16.4.6 (Turbopack)
+- Environments: .env
+Γ£ô Running next.config.ts took 97ms
+- Cache Components enabled
+- Partial Prefetching enabled
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 10.5s
+  Running TypeScript ...
+  Finished TypeScript in 20.0s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/32) ...
+node.exe : Error fetching dashboard data: Error: Route /api/dashboard needs to bail out of prerendering at this point 
+because it used request.url.
+At C:\Node.js\equip-rent-client\node_modules\.bin\next.ps1:24 char:5
++     & "node$exe"  "$basedir/../next/dist/bin/next" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error fetching ...ed request.url.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    at i (src\app\api\dashboard\route.ts:116:33)
+  114 | export async function GET(request: Request) {
+  115 |   try {
+> 116 |     const url = new URL(request.url);
+      |                                 ^
+  117 |     const pathname = url.pathname; // /api/dashboard/stats, /api/dashboard/owner, 
+/api/dashboard/admin/all-rentals
+  118 |
+  119 |     // Stats endpoint {
+  digest: 'NEXT_PRERENDER_INTERRUPTED'
+}
+Error fetching dashboard data: Error: Route /api/dashboard needs to bail out of prerendering at this point because it 
+used request.url.
+    at i (src\app\api\dashboard\route.ts:116:33)
+  114 | export async function GET(request: Request) {
+  115 |   try {
+> 116 |     const url = new URL(request.url);
+      |                                 ^
+  117 |     const pathname = url.pathname; // /api/dashboard/stats, /api/dashboard/owner, 
+/api/dashboard/admin/all-rentals
+  118 |
+  119 |     // Stats endpoint {
+  digest: 'NEXT_PRERENDER_INTERRUPTED'
+}
+  Generating static pages using 3 workers (8/32) 
+  Generating static pages using 3 workers (16/32) 
+  Generating static pages using 3 workers (24/32) 
+Γ£ô Generating static pages using 3 workers (32/32) in 5.5s
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ Γùï /about
+Γö£ ╞Æ /api/bookings
+Γö£ ╞Æ /api/dashboard
+Γö£ ╞Æ /api/equipment
+Γö£ ╞Æ /api/favorites
+Γö£ ╞Æ /api/users
+Γö£   /booking/[id]
+Γöé Γöö ΓùÉ /booking/[id]
+Γö£ Γùï /contact
+Γö£ Γùï /dashboard/admin
+Γö£ Γùï /dashboard/admin/bookings
+Γö£ Γùï /dashboard/admin/equipment
+Γö£ Γùï /dashboard/admin/users
+Γö£ Γùï /dashboard/customer
+Γö£ Γùï /dashboard/customer/bookings
+Γö£ Γùï /dashboard/customer/favorites
+Γö£ Γùï /dashboard/customer/payments
+Γö£ Γùï /dashboard/owner
+Γö£ Γùï /dashboard/owner/add-equipment
+Γö£ Γùï /dashboard/owner/bookings
+Γö£   /dashboard/owner/edit-equipment/[id]
+Γöé Γöö ΓùÉ /dashboard/owner/edit-equipment/[id]
+Γö£ Γùï /dashboard/owner/my-equipment
+Γö£ Γùï /equipment
+Γö£   /equipment/[id]
+Γöé Γöö ΓùÉ /equipment/[id]
+Γö£ Γùï /login
+Γö£ Γùï /payment/cancel
+Γö£ Γùï /payment/success
+Γö£ Γùï /profile
+Γöö Γùï /signup
+
+
+Γùï  (Static)             prerendered as static content
+ΓùÉ  (Partial Prerender)  prerendered as static HTML with dynamic server-streamed content
+╞Æ  (Dynamic)            server-rendered on demand
+

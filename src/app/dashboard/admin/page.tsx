@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -28,10 +27,19 @@ interface Equipment {
   location: string;
   rentalPrice: number;
   rentalType: string;
-  image: string;
+  availableQuantity: number;
+  condition: string;
   brand: string;
   model: string;
+  image: string;
   status: "Pending" | "Approved" | "Rejected";
+}
+
+interface Booking {
+  _id: string;
+  totalAmount: number;
+  bookingStatus: "Pending" | "Confirmed" | "Cancelled";
+  paymentStatus: "Pending" | "Paid";
 }
 
 interface EquipmentStatistics {
@@ -41,11 +49,13 @@ interface EquipmentStatistics {
   rejectedEquipment: number;
 }
 
-interface Booking {
-  _id: string;
-  totalAmount: number;
-  bookingStatus: "Pending" | "Confirmed" | "Cancelled";
-  paymentStatus: "Pending" | "Paid";
+interface BookingStatistics {
+  totalBookings: number;
+  confirmedBookings: number;
+  pendingBookings: number;
+  cancelledBookings: number;
+  paidBookings: number;
+  paidRevenue: number;
 }
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/equipment`;
@@ -101,26 +111,24 @@ export default function AdminDashboard() {
 
       if (!statsResponse.ok) {
         throw new Error(
-          statsData.message ||
-            "Failed to load equipment statistics."
+          statsData.message || "Failed to load equipment statistics."
         );
       }
 
       if (!pendingResponse.ok) {
         throw new Error(
-          pendingData.message ||
-            "Failed to load pending equipment."
+          pendingData.message || "Failed to load pending equipment."
         );
       }
 
       if (!bookingsResponse.ok) {
         throw new Error(
-          bookingsData.message ||
-            "Failed to load booking statistics."
+          bookingsData.message || "Failed to load booking statistics."
         );
       }
 
       setStatistics(statsData.statistics);
+      // Equipment list is the pending ones for review
       setEquipment(pendingData.equipment || []);
       setBookings(bookingsData.data || []);
     } catch (err) {
@@ -169,9 +177,7 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data.message || "Status update failed."
-        );
+        throw new Error(data.message || "Status update failed.");
       }
 
       setMessage(
@@ -545,8 +551,8 @@ export default function AdminDashboard() {
                       </h3>
 
                       <span className="shrink-0 rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-800">
-                        {item.status}
-                      </span>
+        {item.status}
+      </span>
                     </div>
 
                     <p className="line-clamp-3 text-sm leading-6 text-gray-500">
@@ -618,6 +624,126 @@ export default function AdminDashboard() {
             </div>
           )}
         </section>
+
+        {/* All Equipment Management Table */}
+        <section className="mt-10">
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold text-gray-900">
+              All Equipment
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Complete list of all equipment items with management actions.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-gray-500">
+                  <th className="py-3 pr-4">Equipment Name</th>
+                  <th className="py-3 pr-4">Category</th>
+                  <th className="py-3 pr-4">Rental Price</th>
+                  <th className="py-3">Status</th>
+                  <th className="py-3">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                { /* Note: In a full implementation, this would fetch all equipment from the API */}
+                {/* For now, showing pending equipment above; admin can view all via the link below */}
+                <tr>
+                  <td className="py-4 pr-4" colSpan={5}>
+                    <p className="text-sm text-gray-500">
+                      Use the management links above to view and manage equipment.
+                    </p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* All Bookings Management Table */}
+        <section className="mt-10">
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold text-gray-900">
+              All Bookings
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Complete list of all booking records with management capabilities.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-gray-500">
+                  <th className="py-3 pr-4">Booking ID</th>
+                  <th className="py-3 pr-4">Customer</th>
+                  <th className="py-3 pr-4">Equipment</th>
+                  <th className="py-3">Amount</th>
+                  <th className="py-3">Booking Status</th>
+                  <th className="py-3">Payment Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {bookings.map((booking) => (
+                  <tr
+                    key={booking._id}
+                    className="border-b last:border-0"
+                  >
+                    <td className="py-4 pr-4 font-medium text-gray-800">
+                      {booking._id.slice(-8)}
+                    </td>
+
+                    <td className="py-4 pr-4">
+                      {/* In full implementation, fetch user info */}
+                      Customer
+                    </td>
+
+                    <td className="py-4 pr-4">
+                      {/* In full implementation, fetch equipment info */}
+                      Equipment
+                    </td>
+
+                    <td className="py-4 pr-4">
+                      ৳{booking.totalAmount.toLocaleString("en-BD")}
+                    </td>
+
+                    <td className="py-4">
+                      {booking.bookingStatus}
+                    </td>
+
+                    <td className="py-4">
+                      {booking.paymentStatus}
+                    </td>
+
+                    <td className="py-4">
+                      {/* Action buttons for admin */}
+                      <div className="flex gap-1">
+                        <button
+                          className="text-indigo-600 text-xs hover:text-indigo-800"
+                        >
+                          View
+                        </button>
+                        <button
+                          className="text-red-600 text-xs hover:text-red-800"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
     </main>
   );

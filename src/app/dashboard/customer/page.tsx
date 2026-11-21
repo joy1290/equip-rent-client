@@ -1,16 +1,16 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "@/lib/auth-client";
 import Link from "next/link";
 import {
   CalendarCheck,
+  CheckCircle,
   CreditCard,
   Search,
   User,
   Heart,
   Clock,
-  CheckCircle,
   XCircle,
   Wallet,
   ArrowRight,
@@ -81,6 +81,7 @@ export default function CustomerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const { data: session } = useSession();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -133,6 +134,44 @@ export default function CustomerDashboard() {
     return () => controller.abort();
   }, [retry]);
 
+  // Also fetch favorites count
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const controller = new AbortController();
+
+    const fetchFavorites = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/equipment/favorites`,
+          {
+            credentials: "include",
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        if (Array.isArray(data.favorites)) {
+          // Store favorites count or state - could be used in navbar
+          // For now, just log or store in localStorage
+          localStorage.setItem(
+            "customer_favorites",
+            JSON.stringify(data.favorites.map((f: any) => f._id))
+          );
+        }
+      } catch {
+        // Favorites are non-critical — ignore load failures
+      }
+    };
+
+    fetchFavorites();
+
+    return () => controller.abort();
+  }, [session?.user]);
+
   const totalBookings = bookings.length;
 
   const pendingBookings = bookings.filter(
@@ -149,15 +188,13 @@ export default function CustomerDashboard() {
 
   const paidAmount = bookings.reduce((total, booking) => {
     if (booking.paymentStatus !== "Paid") return total;
-
     return total + Number(booking.totalAmount || 0);
   }, 0);
 
   const recentBookings = [...bookings]
     .sort(
       (a, b) =>
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     .slice(0, 5);
 
@@ -264,8 +301,7 @@ export default function CustomerDashboard() {
                   onClick={() => setRetry((prev) => prev + 1)}
                   className="flex shrink-0 items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
                 >
-                  <RefreshCw size={16} />
-                  Try Again
+                  <RefreshCw size={16} /> Try Again
                 </button>
               </div>
             </div>
@@ -336,27 +372,27 @@ export default function CustomerDashboard() {
                       const percentage =
                         (item.count / totalBookings) * 100;
 
-                      return (
-                        <div key={item.label}>
-                          <div className="mb-2 flex items-center justify-between gap-2 text-xs sm:text-sm">
-                            <span className="font-semibold text-gray-700">
-                              {item.label}
-                            </span>
+      return (
+        <div key={item.label}>
+          <div className="mb-2 flex items-center justify-between gap-2 text-xs sm:text-sm">
+            <span className="font-semibold text-gray-700">
+              {item.label}
+            </span>
 
-                            <span className="shrink-0 text-gray-500">
-                              {item.count} ({percentage.toFixed(0)}%)
-                            </span>
-                          </div>
+            <span className="shrink-0 text-gray-500">
+              {item.count} ({percentage.toFixed(0)}%)
+            </span>
+          </div>
 
-                          <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 sm:h-3">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${item.color}`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 sm:h-3">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${item.color}`}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        </div>
+      );
+    })}
                   </div>
                 )}
               </div>
@@ -379,10 +415,7 @@ export default function CustomerDashboard() {
 
                 {recentBookings.length === 0 ? (
                   <div className="py-8 text-center">
-                    <Package
-                      size={36}
-                      className="mx-auto text-gray-300"
-                    />
+                    <Package size={36} className="mx-auto text-gray-300" />
 
                     <p className="mt-3 text-sm text-gray-500">
                       No bookings found.
@@ -488,7 +521,7 @@ export default function CustomerDashboard() {
 
             <div className="min-w-0">
               <h2 className="text-base font-bold text-gray-900 sm:text-lg">
-                Customer Account
+                My Profile
               </h2>
 
               <p className="mt-1 text-sm leading-6 text-gray-600">
