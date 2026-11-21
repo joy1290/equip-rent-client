@@ -1,15 +1,29 @@
 
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
+
 import { signIn } from "@/lib/auth-client";
 
-export default function LoginPage() {
+/** Only same-origin relative paths are accepted as post-login redirects. */
+const safeNext = (value: string | null) =>
+  value && value.startsWith("/") && !value.startsWith("//")
+    ? value
+    : "/";
+
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNext(searchParams.get("next"));
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +41,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect to Home Page
-      window.location.replace("/");
+      toast.success("Logged in successfully! Welcome back.");
+      window.location.replace(nextPath);
     } catch {
       setMessage("Something went wrong!");
     } finally {
@@ -43,7 +57,7 @@ export default function LoginPage() {
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: `${window.location.origin}/`,
+        callbackURL: `${window.location.origin}${nextPath}`,
         errorCallbackURL: `${window.location.origin}/login`,
       });
     } catch {
@@ -117,8 +131,33 @@ export default function LoginPage() {
             {message}
           </p>
         )}
+
+        {/* Link to Register */}
+        <p className="text-center text-sm text-gray-500">
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/signup"
+            className="font-medium text-blue-600 hover:underline"
+          >
+            Register
+          </Link>
+        </p>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
 
@@ -135,7 +174,7 @@ function GoogleIcon() {
       />
       <path
         fill="#FBBC05"
-        d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z"
+        d="M10.53 28.59A14.4 14.4 0 0 0 9.75 24c0-1.59.27-3.13.76-4.59l-7.98 6.19A8.64 8.64 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z"
       />
       <path
         fill="#34A853"
