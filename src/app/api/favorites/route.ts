@@ -1,25 +1,38 @@
 import { NextResponse } from "next/server";
 import { authClient } from "@/lib/auth-client";
 
-// In-memory favorites store (for development; replace with MongoDB in production)
-let favoritesStore = [
-  // Sample favorites for testing
-  {
-    id: "1",
-    userId: "customer1",
-    equipmentId: "1",
-  },
-  {
-    id: "2",
-    userId: "customer1",
-    equipmentId: "2",
-  },
-  {
-    id: "3",
-    userId: "customer2",
-    equipmentId: "3",
-  },
-];
+// MongoDB Favorite model - using mongoose for MongoDB persistence
+// Install: npm i mongoose
+// Ensure MONGODB_URI is set in environment
+
+import mongoose from "mongoose";
+
+// In production, use a proper DB module. For now, connect on demand.
+let cachedMongoose = { conn: null, promise: null };
+
+async function connectToDatabase() {
+  if (cachedMongoose.conn) return cachedMongoose.conn;
+  if (!cachedMongoose.promise) {
+    const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/equip-rent";
+    cachedMongoose.promise = mongoose.connect(uri).then((m) => m);
+  }
+  cachedMongoose.conn = await cachedMongoose.promise;
+  return cachedMongoose.conn;
+}
+
+// Define Favorite schema and model
+function getFavoriteModel() {
+  const conn = await connectToDatabase();
+  if (!conn.models?.Favorite) {
+    const FavoriteSchema = new mongoose.Schema({
+      userId: { type: String, required: true },
+      equipmentId: { type: String, required: true },
+      favoritedAt: { type: Date, default: Date.now },
+    });
+    conn.model("Favorite", FavoriteSchema);
+  }
+  return conn.model("Favorite");
+}
 
 // GET /api/favorites - Get current user's favorites
 export async function GET(request: Request) {
@@ -30,9 +43,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ favorites: [] }, { status: 200 });
     }
 
-    const userFavorites = favoritesStore.filter(
-      (f) => f.userId === session.user.id
-    );
+    const Favorite = getFavoriteModel();
+    const userFavorites = await Favorite.find({ userId: session.user.id })
+      .sort({ favoritedAt: -1 })
+      .lean();
 
     return NextResponse.json({ favorites: userFavorites }, { status: 200 });
   } catch (error) {
@@ -66,9 +80,11 @@ export async function POST(request: Request) {
     }
 
     // Check if already favorited
-    const alreadyFavorited = favoritesStore.some(
-      (f) => f.userId === session.user.id && f.equipmentId === equipmentId
-    );
+    const Favorite = getFavoriteModel();
+    const alreadyFavorited = await Favorite.findOne({
+      userId: session.user.id,
+      equipmentId,
+    });
 
     if (alreadyFavorited) {
       return NextResponse.json(
@@ -77,13 +93,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const newFavorite = {
-      id: Date.now().toString(),
+    const newFavorite = new Favorite({
       userId: session.user.id,
       equipmentId,
-    };
+    });
 
-    favoritesStore.push(newFavorite);
+    await newFavorite.save();
 
     return NextResponse.json(newFavorite, { status: 201 });
   } catch (error) {
@@ -117,15 +132,14 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Remove the favorite
-    const beforeLength = favoritesStore.length;
-    favoritesStore = favoritesStore.filter(
-      (f) => !(f.userId === session.user.id && f.equipmentId === equipmentId)
-    );
+    // Remove the favorite from MongoDB
+    const Favorite = getFavoriteModel();
+    const result = await Favorite.deleteOne({
+      userId: session.user.id,
+      equipmentId,
+    });
 
-    const afterLength = favoritesStore.length;
-
-    if (beforeLength === afterLength) {
+    if (result.deletedCount === 0) {
       return NextResponse.json(
         { error: "Favorite not found" },
         { status: 404 }
@@ -141,52 +155,3 @@ export async function DELETE(request: Request) {
     );
   }
 }
-
-/**
- * MongoDB Alternative Implementation:
- * 
- * If you have mongoose installed, replace the in-memory store with:
- * 
- * import mongoose from "mongoose";
- * 
- * const FavoriteSchema = new mongoose.Schema({
- *   userId: { type: String, required: true },
- *   equipmentId: { type: String, required: true },
- *   favoritedAt: { type: Date, default: Date.now },
- * });
- * 
- * const Favorite = mongoose.model("Favorite", FavoriteSchema);
- * 
- * // GET /api/favorites
- * export async function GET(request: Request) {
- *   const { data: session } = await authClient.useSession();
- *   const userId = session?.user?.id;
- *   const favorites = await Favorite.find({ userId });
- *   return NextResponse.json(favorites);
- * }
- * 
- * // POST /api/favorites
- * export async function POST(request: Request) {
- *   const { data: session } = await authClient.useSession();
- *   const { equipmentId } = await request.json();
- *   const userId = session?.user?.id;
- * 
- *   // Check duplicate
- *   const exists = await Favorite.findOne({ userId, equipmentId });
- *   if (exists) return NextResponse.json({ error: "Already favorited" }, { status: 409 });
- * 
- *   const favorite = new Favorite({ userId, equipmentId });
- *   await favorite.save();
- *   return NextResponse.json(favorite, { status: 201 });
- * }
- * 
- * // DELETE /api/favorites/[id]
- * export async function DELETE(request: Request) {
- *   const { data: session } = await authClient.useSession();
- *   const { equipmentId } = new URL(request).pathname.split("/");
- *   const userId = session?.user?.id;
- *   
- *   await Favorite.deleteOne({ userId, equipmentId });
- *   return NextResponse.json({ success: true });
- * }
- */

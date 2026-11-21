@@ -101,23 +101,58 @@ let equipmentStore = [
   },
 ];
 
+// Helper: get current user ID from session
+async function getCurrentUserId(): Promise<string> {
+  const { data: session } = await authClient.useSession();
+  return data?.user?.id ?? "";
+}
+
 // GET /api/equipment - Get all approved equipment with search, filters, sort, pagination
+// GET /api/equipment/my-equipment - Get current user's equipment
+// GET /api/equipment/featured - Get featured equipment (first 6 approved)
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "6");
+    const url = new URL(request.url);
+    const pathname = url.pathname; // e.g. /api/equipment or /api/equipment/my-equipment
+
+    // Handle "my-equipment" sub-path
+    if (pathname.endsWith("/my-equipment")) {
+      const { data: session } = await authClient.useSession();
+
+      if (!session?.user) {
+        return NextResponse.json({ equipment: [] }, { status: 200 });
+      }
+
+      const userId = session.user.id;
+      const items = equipmentStore.filter(
+        (item) => item.ownerId === userId
+      );
+
+      return NextResponse.json({ equipment: items }, { status: 200 });
+    }
+
+    // Handle "featured" sub-path - return first 6 approved equipment
+    if (pathname.endsWith("/featured")) {
+      const featuredItems = equipmentStore
+        .filter((item) => item.status === "Approved")
+        .slice(0, 6);
+
+      return NextResponse.json({ equipment: featuredItems }, { status: 200 });
+    }
+
+    // Default: Get all approved equipment with filters
+    const page = parseInt(url.searchParams.get("page") || "1");
+    const limit = parseInt(url.searchParams.get("limit") || "6");
     const skip = (page - 1) * limit;
 
-    const search = searchParams.get("search") || "";
-    const category = searchParams.get("category") || "";
-    const rentalType = searchParams.get("rentalType") || "";
-    const minPrice = searchParams.get("minPrice") || "";
-    const maxPrice = searchParams.get("maxPrice") || "";
-    const availability = searchParams.get("availability") || "";
-    const sortBy = searchParams.get("sortBy") || "";
-    const sortOrder = searchParams.get("sortOrder") || "asc";
+    const search = url.searchParams.get("search") || "";
+    const category = url.searchParams.get("category") || "";
+    const rentalType = url.searchParams.get("rentalType") || "";
+    const minPrice = url.searchParams.get("minPrice") || "";
+    const maxPrice = url.searchParams.get("maxPrice") || "";
+    const availability = url.searchParams.get("availability") || "";
+    const sortBy = url.searchParams.get("sortBy") || "";
+    const sortOrder = url.searchParams.get("sortOrder") || "asc";
 
     // Filter equipment
     let items = equipmentStore.filter((item) => item.status === "Approved");
@@ -169,7 +204,6 @@ export async function GET(request: Request) {
         aVal = b.rentalPrice;
         bVal = a.rentalPrice;
       } else if (sortBy === "recentlyAdded") {
-        // Default sort by ID (simulating recency)
         aVal = parseInt(a.id) || 0;
         bVal = parseInt(b.id) || 0;
       } else {
@@ -204,7 +238,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
+
     const {
       name,
       description,
@@ -219,6 +253,8 @@ export async function POST(request: Request) {
       rentalTerms,
       image,
     } = body;
+
+    const userId = (await authClient.useSession()).data?.user?.id ?? "";
 
     const newEquipment = {
       id: Date.now().toString(),
@@ -235,6 +271,7 @@ export async function POST(request: Request) {
       rentalTerms,
       image: image || "/placeholder-equipment.jpg",
       status: "Pending", // New equipment starts as pending
+      ownerId: userId, // Track the equipment owner
       createdAt: new Date(),
     };
 
