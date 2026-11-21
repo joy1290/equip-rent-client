@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import ThemeToggle from "@/components/ui/theme-toggle";
 
 export default function Navbar() {
   const { data: session, isPending } = authClient.useSession();
@@ -95,6 +96,7 @@ export default function Navbar() {
 
         {/* Desktop User Actions */}
         <div className="hidden items-center gap-3 lg:flex xl:gap-4">
+          <ThemeToggle />
           {isPending ? (
             <span className="text-sm text-gray-500">Loading...</span>
           ) : user ? (
@@ -164,6 +166,14 @@ export default function Navbar() {
           className="border-t border-gray-100 bg-white px-4 py-5 shadow-lg sm:px-6 lg:hidden"
         >
           <div className="mx-auto flex max-w-7xl flex-col gap-5">
+
+            {/* Theme Toggle */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-500">
+                Appearance
+              </span>
+              <ThemeToggle />
+            </div>
 
             {/* Navigation Links */}
             <div className="flex flex-col gap-4">
