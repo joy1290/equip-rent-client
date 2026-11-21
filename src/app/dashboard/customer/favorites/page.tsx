@@ -16,6 +16,7 @@ interface FavoriteEquipment {
   brand: string;
   model: string;
   image: string;
+  availableQuantity: number;
   favoritedAt: string;
 }
 
@@ -150,65 +151,100 @@ export default function MyFavoritesPage() {
               {favorites.length} Favorite Equipment
             </p>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {favorites.map((item) => (
-                <div
-                  key={item._id}
-                  className="overflow-hidden rounded-xl bg-white shadow-sm transition hover:shadow-lg"
-                >
-                  <div className="h-52 overflow-hidden bg-gray-100">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
+            <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Equipment</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Rental Price</th>
+                    <th className="px-4 py-3">Location</th>
+                    <th className="px-4 py-3">Availability</th>
+                    <th className="px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
 
-                  <div className="p-5">
-                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600">
-                      {item.category}
-                    </span>
+                <tbody className="divide-y divide-gray-100">
+                  {favorites.map((item) => (
+                    <tr
+                      key={item._id}
+                      className="transition hover:bg-gray-50"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-10 w-10 rounded-lg object-cover"
+                          />
 
-                    <h2 className="mt-3 text-xl font-bold text-gray-900">
-                      {item.name}
-                    </h2>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-gray-900">
+                              {item.name}
+                            </p>
 
-                    <p className="mt-2 text-sm text-gray-500">
-                      {item.brand} {item.model}
-                    </p>
+                            <p className="truncate text-xs text-gray-500">
+                              {item.brand} {item.model}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
 
-                    <p className="mt-2 text-sm text-gray-600">
-                      Location: {item.location}
-                    </p>
+                      <td className="px-4 py-3 text-gray-600">
+                        {item.category}
+                      </td>
 
-                    <p className="mt-3 text-lg font-bold text-indigo-600">
-                      ৳{item.rentalPrice}
-                      <span className="text-sm font-normal text-gray-500">
-                        /{item.rentalType}
-                      </span>
-                    </p>
+                      <td className="px-4 py-3 font-semibold text-gray-900">
+                        ৳{item.rentalPrice}
+                        <span className="text-xs font-normal text-gray-500">
+                          /{item.rentalType}
+                        </span>
+                      </td>
 
-                    <div className="mt-5 flex gap-3">
-                      <Link
-                        href={`/equipment/${item._id}`}
-                        className="flex-1 rounded-lg bg-indigo-600 px-3 py-3 text-center text-sm font-semibold text-white transition hover:bg-indigo-700"
-                      >
-                        View Details
-                      </Link>
+                      <td className="px-4 py-3 text-gray-600">
+                        {item.location}
+                      </td>
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(item._id)}
-                        disabled={removingId === item._id}
-                        className="flex items-center justify-center gap-2 rounded-lg border border-red-200 px-3 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                      >
-                        <Trash2 size={17} />
-                        {removingId === item._id ? "Removing..." : "Remove"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            item.availableQuantity > 0
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-600"
+                          }`}
+                        >
+                          {item.availableQuantity > 0
+                            ? "Available"
+                            : "Out of Stock"}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Link
+                            href={`/equipment/${item._id}`}
+                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                          >
+                            View Details
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(item._id)}
+                            disabled={removingId === item._id}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <Trash2 size={14} />
+                            {removingId === item._id
+                              ? "Removing..."
+                              : "Remove Favorite"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         )}
