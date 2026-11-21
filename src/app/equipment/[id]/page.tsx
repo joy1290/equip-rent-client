@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -42,18 +43,26 @@ interface BookingForm {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-const today = () => new Date().toLocaleDateString("en-CA");
+const today = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-// Equipment Details Content
+  return `${year}-${month}-${day}`;
+};
+
 function EquipmentDetailsContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = useSession();
 
   const id = params.id;
-
   const user = session?.user;
-  const role = (user as { role?: string } | undefined)?.role ?? "customer";
+
+  const role =
+    (user as { role?: string } | undefined)?.role ?? "customer";
+
   const isCustomer = role === "customer";
 
   const [equipment, setEquipment] = useState<Equipment | null>(null);
@@ -64,10 +73,11 @@ function EquipmentDetailsContent() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
 
-  // Booking modal
+  // Booking Modal
   const [showBooking, setShowBooking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
   const [form, setForm] = useState<BookingForm>({
     startDate: "",
     endDate: "",
@@ -79,7 +89,7 @@ function EquipmentDetailsContent() {
 
   // Fetch Equipment Details
   useEffect(() => {
-    if (!id) return;
+    if (!id || !API_URL) return;
 
     const controller = new AbortController();
 
@@ -95,7 +105,7 @@ function EquipmentDetailsContent() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.message || "Equipment not found");
+          throw new Error(data.message || "Equipment not found.");
         }
 
         setEquipment(data.equipment);
@@ -107,7 +117,7 @@ function EquipmentDetailsContent() {
         setError(
           err instanceof Error
             ? err.message
-            : "Something went wrong"
+            : "Something went wrong."
         );
       } finally {
         if (!controller.signal.aborted) {
@@ -118,14 +128,12 @@ function EquipmentDetailsContent() {
 
     fetchEquipment();
 
-    return () => {
-      controller.abort();
-    };
+    return () => controller.abort();
   }, [id]);
 
-  // Load favorites (customers only) to show the current state
+  // Fetch Favorites
   useEffect(() => {
-    if (!id || !isCustomer || !user) return;
+    if (!id || !isCustomer || !user || !API_URL) return;
 
     const controller = new AbortController();
 
@@ -137,11 +145,6 @@ function EquipmentDetailsContent() {
         });
 
         if (!response.ok) {
-          // Handle unauthorized gracefully - redirect to login
-          if (session?.user) {
-            // Show error but don't redirect if already logged in
-            toast.error("Could not load favorites. Please try again.");
-          }
           return;
         }
 
@@ -155,8 +158,9 @@ function EquipmentDetailsContent() {
           );
         }
       } catch (err) {
-        // Favorites are non-critical — ignore load failures
-        console.error("Favorite load error:", err);
+        if (err instanceof Error && err.name !== "AbortError") {
+          console.error("Favorite load error:", err);
+        }
       }
     };
 
@@ -165,9 +169,9 @@ function EquipmentDetailsContent() {
     return () => controller.abort();
   }, [id, isCustomer, user]);
 
-  // Toggle favorite
+  // Toggle Favorite
   const toggleFavorite = async () => {
-    if (favoriteBusy || !user) return;
+    if (favoriteBusy || !user || !API_URL) return;
 
     if (!isCustomer) {
       toast.error("Only customers can save favorites.");
@@ -189,6 +193,7 @@ function EquipmentDetailsContent() {
       }
 
       setIsFavorite(!isFavorite);
+
       toast.success(
         isFavorite
           ? "Removed from favorites."
@@ -196,14 +201,16 @@ function EquipmentDetailsContent() {
       );
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Something went wrong."
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
       );
     } finally {
       setFavoriteBusy(false);
     }
   };
 
-  // Calculate total amount (daily / weekly / monthly × quantity)
+  // Calculate Total Rental Amount
   const totalAmount = useMemo(() => {
     if (!equipment || !form.startDate || !form.endDate) return 0;
 
@@ -221,6 +228,7 @@ function EquipmentDetailsContent() {
     if (!Number.isInteger(quantity) || quantity < 1) return 0;
 
     let duration = days;
+
     const rentalType = equipment.rentalType.toLowerCase();
 
     if (rentalType === "weekly") {
@@ -232,10 +240,12 @@ function EquipmentDetailsContent() {
     return equipment.rentalPrice * duration * quantity;
   }, [equipment, form.startDate, form.endDate, form.quantity]);
 
-  // Book Now → open the booking modal (login + role checked)
+  // Book Now
   const handleBookNow = () => {
     if (!user) {
-      router.push(`/login?next=${encodeURIComponent(`/equipment/${id}`)}`);
+      router.push(
+        `/login?next=${encodeURIComponent(`/equipment/${id}`)}`
+      );
       return;
     }
 
@@ -248,11 +258,14 @@ function EquipmentDetailsContent() {
     setShowBooking(true);
   };
 
-  // Confirm booking → create booking → redirect to Stripe Checkout
+  // Confirm Booking
   const confirmBooking = async () => {
     setFormError("");
 
-    if (!equipment) return;
+    if (!equipment || !API_URL) {
+      setFormError("Unable to connect to the server.");
+      return;
+    }
 
     if (!form.startDate || !form.endDate) {
       setFormError("Please select both start and end dates.");
@@ -293,10 +306,12 @@ function EquipmentDetailsContent() {
     setSubmitting(true);
 
     try {
-      // 1. Create the booking (server validates availability + total)
+      // 1. Create Booking
       const bookingResponse = await fetch(`${API_URL}/bookings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         credentials: "include",
         body: JSON.stringify({
           equipmentId: id,
@@ -312,63 +327,53 @@ function EquipmentDetailsContent() {
       const bookingData = await bookingResponse.json();
 
       if (!bookingResponse.ok) {
-        // Handle specific errors gracefully
-        const errorMsg = bookingData.message || "Booking failed.";
-        
-        // Provide helpful user feedback based on error type
-        if (!bookingData.success) {
-          // Server validation failed - show the specific error
-          toast.error(errorMsg);
-        } else if (errorMsg.includes("clipboard") || errorMsg.includes("permission")) {
-          toast.error("System error. Please try again or contact support.");
-        } else {
-          toast.error(errorMsg);
-        }
-        setSubmitting(false);
-        return;
+        throw new Error(
+          bookingData.message || "Booking failed."
+        );
       }
 
-      // 2. Create the Stripe Checkout session for this booking
+      if (!bookingData.bookingId) {
+        throw new Error("Booking ID was not returned by the server.");
+      }
+
+      // 2. Create Stripe Checkout Session
       const checkoutResponse = await fetch(
         `${API_URL}/payments/create-checkout-session`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           credentials: "include",
-          body: JSON.stringify({ bookingId: bookingData.bookingId }),
+          body: JSON.stringify({
+            bookingId: bookingData.bookingId,
+          }),
         }
       );
 
       const checkoutData = await checkoutResponse.json();
 
       if (!checkoutResponse.ok) {
-        const errorMsg = checkoutData.message || "Could not start payment.";
-        
-        if (errorMsg.includes("clipboard") || errorMsg.includes("permission")) {
-          toast.error("Payment system error. Please try again or contact support.");
-        } else if (!checkoutData.success) {
-          // Payment session failed - show the specific error
-          toast.error(errorMsg);
-        } else {
-          toast.error(errorMsg);
-        }
-        setSubmitting(false);
-        return;
+        throw new Error(
+          checkoutData.message || "Could not start payment."
+        );
       }
 
       if (!checkoutData.checkoutUrl) {
-        toast.error("Payment session was not created.");
-        setSubmitting(false);
-        return;
+        throw new Error("Payment session was not created.");
       }
 
-      toast.success("Booking created! Redirecting to secure payment...");
+      toast.success(
+        "Booking created! Redirecting to secure payment..."
+      );
 
-      // 3. Redirect to Stripe Checkout
+      // 3. Redirect to Stripe
       window.location.href = checkoutData.checkoutUrl;
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+        err instanceof Error
+          ? err.message
+          : "Something went wrong.";
 
       setFormError(message);
       toast.error(message);
@@ -393,7 +398,7 @@ function EquipmentDetailsContent() {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <p className="text-red-500">
-          {error || "Equipment not found"}
+          {error || "Equipment not found."}
         </p>
 
         <button
@@ -443,7 +448,9 @@ function EquipmentDetailsContent() {
 
               <span
                 className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${
-                  inStock ? "bg-green-50 text-green-700" : "bg-red-50 text-red-500"
+                  inStock
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-500"
                 }`}
               >
                 {inStock ? "Available" : "Out of Stock"}
@@ -494,7 +501,7 @@ function EquipmentDetailsContent() {
                   src={owner.image}
                   alt={owner.name || "Owner"}
                   className="h-11 w-11 rounded-full object-cover"
-                )
+                />
               ) : (
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">
                   {(owner?.name || "O").charAt(0).toUpperCase()}
@@ -525,7 +532,7 @@ function EquipmentDetailsContent() {
                   </span>
                 </p>
 
-                {/* Favorite (customers only) */}
+                {/* Favorite */}
                 {isCustomer && (
                   <button
                     type="button"
@@ -544,33 +551,33 @@ function EquipmentDetailsContent() {
                     {isFavorite ? "Saved" : "Add to Favorites"}
                   </button>
                 )}
-
-                {/* Rental Terms */}
-                <div className="mt-5">
-                  <h2 className="font-semibold text-gray-900">
-                    Rental Terms & Conditions
-                  </h2>
-
-                  <p className="mt-2 whitespace-pre-line leading-relaxed text-gray-600">
-                    {equipment.rentalTerms}
-                  </p>
-                </div>
-
-                {/* Booking Button */}
-                <button
-                  disabled={!inStock}
-                  onClick={handleBookNow}
-                  className="mt-7 w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                >
-                  {inStock ? "Book Now" : "Not Available"}
-                </button>
               </div>
+
+              {/* Rental Terms */}
+              <div className="mt-5">
+                <h2 className="font-semibold text-gray-900">
+                  Rental Terms & Conditions
+                </h2>
+
+                <p className="mt-2 whitespace-pre-line leading-relaxed text-gray-600">
+                  {equipment.rentalTerms}
+                </p>
+              </div>
+
+              {/* Booking Button */}
+              <button
+                disabled={!inStock}
+                onClick={handleBookNow}
+                className="mt-7 w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+              >
+                {inStock ? "Book Now" : "Not Available"}
+              </button>
             </div>
           </div>
         </div>
 
         {/* Booking Modal */}
-        {showBooking && equipment && (
+        {showBooking && (
           <div
             role="dialog"
             aria-modal="true"
@@ -616,7 +623,7 @@ function EquipmentDetailsContent() {
                   >
                     {formError}
                   </p>
-                )
+                )}
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
@@ -629,7 +636,10 @@ function EquipmentDetailsContent() {
                       min={today()}
                       value={form.startDate}
                       onChange={(e) =>
-                        setForm({ ...form, startDate: e.target.value })
+                        setForm({
+                          ...form,
+                          startDate: e.target.value,
+                        })
                       }
                       className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />
@@ -645,7 +655,10 @@ function EquipmentDetailsContent() {
                       min={form.startDate || today()}
                       value={form.endDate}
                       onChange={(e) =>
-                        setForm({ ...form, endDate: e.target.value })
+                        setForm({
+                          ...form,
+                          endDate: e.target.value,
+                        })
                       }
                       className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />
@@ -662,7 +675,10 @@ function EquipmentDetailsContent() {
                       max={equipment.availableQuantity}
                       value={form.quantity}
                       onChange={(e) =>
-                        setForm({ ...form, quantity: e.target.value })
+                        setForm({
+                          ...form,
+                          quantity: e.target.value,
+                        })
                       }
                       className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />
@@ -763,6 +779,7 @@ function EquipmentDetailsContent() {
                   {submitting && (
                     <Loader2 size={17} className="animate-spin" />
                   )}
+
                   {submitting
                     ? "Redirecting to payment..."
                     : "Confirm & Pay with Stripe"}
@@ -770,13 +787,13 @@ function EquipmentDetailsContent() {
               </div>
             </div>
           </div>
-        </div>
-      </main>
-    );
+        )}
+      </div>
+    </main>
   );
 }
 
-// Main Page with Suspense (RoleGuard + hooks need the boundary)
+// Main Page
 export default function EquipmentDetailsPage() {
   return (
     <Suspense
