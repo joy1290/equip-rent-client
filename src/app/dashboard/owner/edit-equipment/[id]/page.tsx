@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, ArrowLeft, Save } from "lucide-react";
 
+import ImageUpload from "@/components/ui/image-upload";
+
 interface EquipmentForm {
   name: string;
   description: string;
@@ -413,20 +415,13 @@ function EditEquipmentContent() {
               </div>
             </div>
 
-            {/* Image URL */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Image URL
-              </label>
-
-              <input
-                type="url"
-                name="image"
-                value={form.image}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-indigo-500"
-              />
-            </div>
+            {/* Image Upload (imgbb) */}
+            <ImageUpload
+              value={form.image}
+              onChange={(url) => setForm((prev) => ({ ...prev, image: url }))}
+              label="Equipment Image"
+              required
+            />
 
             {/* Update Button */}
             <button

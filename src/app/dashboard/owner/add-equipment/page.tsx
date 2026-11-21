@@ -3,6 +3,8 @@
 
 import { useState, FormEvent } from "react";
 
+import ImageUpload from "@/components/ui/image-upload";
+
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/equipment`;
 
 export default function AddEquipmentPage() {
@@ -246,18 +248,12 @@ export default function AddEquipmentPage() {
           />
         </div>
 
-        <div>
-          <label className="mb-2 block font-medium">Image URL</label>
-          <input
-            className={inputClass}
-            type="url"
-            name="image"
-            value={formData.image}
-            onChange={handleChange}
-            placeholder="https://example.com/image.jpg"
-            required
-          />
-        </div>
+        <ImageUpload
+          value={formData.image}
+          onChange={(url) => setFormData((prev) => ({ ...prev, image: url }))}
+          label="Equipment Image"
+          required
+        />
 
         <div>
           <label className="mb-2 block font-medium">Rental Terms</label>
