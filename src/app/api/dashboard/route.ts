@@ -1,9 +1,7 @@
 
 import { NextResponse } from "next/server";
 
-
-
-// In-memory dashboard data store (development only)
+// Development sample data only
 const equipmentStore = [
   {
     id: "1",
@@ -127,16 +125,21 @@ const usersStore = [
   },
 ];
 
+type Booking = (typeof bookingsStore)[number];
+
 const bookingsFilter = bookingsStore.filter(
   (booking) => booking.paymentStatus !== undefined
 );
 
 // GET /api/dashboard/*
 export async function GET(request: Request) {
-  try {
-    const url = new URL(request.url);
-    const pathname = url.pathname;
+  // Keep request.url outside try-catch.
+  // This is a dynamic request and must not be swallowed
+  // by the route's error handler.
+  const url = new URL(request.url);
+  const pathname = url.pathname;
 
+  try {
     if (pathname === "/api/dashboard/stats") {
       return getStatsHandler();
     }
@@ -292,7 +295,7 @@ async function getAllRentalsHandler(request: Request) {
     const status = searchParams.get("status") || "";
     const paymentStatus = searchParams.get("paymentStatus") || "";
 
-    let rentals = [...bookingsStore];
+    let rentals: Booking[] = [...bookingsStore];
 
     if (status) {
       rentals = rentals.filter(
