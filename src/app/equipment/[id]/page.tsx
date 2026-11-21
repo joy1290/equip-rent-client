@@ -452,7 +452,7 @@ function EquipmentDetailsContent() {
 
             <h1 className="mt-4 break-words text-2xl font-bold text-gray-900 sm:text-3xl">
               {equipment.name}
-            </p>
+            </h1>
 
             <p className="mt-3 leading-relaxed text-gray-600">
               {equipment.description}
