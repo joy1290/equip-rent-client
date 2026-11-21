@@ -21,7 +21,7 @@ async function connectToDatabase() {
 }
 
 // Define Favorite schema and model
-function getFavoriteModel() {
+async function getFavoriteModel() {
   const conn = await connectToDatabase();
   if (!conn.models?.Favorite) {
     const FavoriteSchema = new mongoose.Schema({
