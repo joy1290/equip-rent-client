@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/bookings`;
 const PAYMENT_API = `${process.env.NEXT_PUBLIC_API_URL}/payments`;
@@ -43,11 +43,15 @@ const bookingBadge: Record<string, string> = {
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-GB");
 
+/** Optional requirement: bookings shown in manageable sections. */
+const PAGE_SIZE = 10;
+
 export default function CustomerBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const fetchBookings = async () => {
     try {
@@ -62,6 +66,7 @@ export default function CustomerBookingsPage() {
       }
 
       setBookings(result.data);
+      setPage(1);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong"
@@ -119,6 +124,13 @@ export default function CustomerBookingsPage() {
     );
   }
 
+  const totalPages = Math.max(1, Math.ceil(bookings.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedBookings = bookings.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   if (error) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-600">
@@ -155,7 +167,8 @@ export default function CustomerBookingsPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <>
+            <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
@@ -171,7 +184,7 @@ export default function CustomerBookingsPage() {
               </thead>
 
               <tbody className="divide-y divide-gray-100">
-                {bookings.map((booking) => {
+                {pagedBookings.map((booking) => {
                   const canPay =
                     booking.paymentStatus === "Pending" &&
                     (booking.bookingStatus === "Pending" ||
@@ -250,7 +263,75 @@ export default function CustomerBookingsPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+
+            {/* Pagination — optional requirement */}
+            {totalPages > 1 && (
+              <nav
+                aria-label="Rentals pagination"
+                className="mt-6 flex flex-wrap items-center justify-between gap-3"
+              >
+                <p className="text-sm text-gray-500">
+                  Page{" "}
+                  <span className="font-semibold text-gray-700">
+                    {currentPage}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-gray-700">
+                    {totalPages}
+                  </span>{" "}
+                  · {bookings.length} rentals
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage((p) => Math.max(1, p - 1))
+                    }
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft size={16} />
+                    Previous
+                  </button>
+
+                  {Array.from(
+                    { length: totalPages },
+                    (_, index) => index + 1
+                  ).map((number) => (
+                    <button
+                      key={number}
+                      type="button"
+                      onClick={() => setPage(number)}
+                      aria-current={
+                        currentPage === number ? "page" : undefined
+                      }
+                      className={`min-w-9 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                        currentPage === number
+                          ? "bg-blue-600 text-white"
+                          : "border bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {number}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </nav>
+            )}
+          </>
         )}
       </div>
     </main>
