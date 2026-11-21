@@ -1,9 +1,7 @@
 
 import { NextResponse } from "next/server";
 
-// Force dynamic rendering because this route uses request.url
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+
 
 // In-memory dashboard data store (development only)
 const equipmentStore = [
