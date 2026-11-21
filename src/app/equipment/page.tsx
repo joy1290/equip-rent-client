@@ -132,9 +132,11 @@ export default function AllEquipmentPage() {
           <div className="mt-4">
             Page {page} of {lastPage}
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="mr-1">Prev</button>
-            {Array.from({ length: lastPage }, (_, i) => i + 1).map((num) => (
-              <button key={num} className={`mr-1 ${page === num ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>{num}</button>
-            ))
+            {Array.from({ length: lastPage }, (_, i) => i + 1).map((num) => {
+              const isActive = page === num;
+              const btnClass = isActive ? 'mr-1 bg-indigo-600 text-white' : 'mr-1 bg-gray-200';
+              return <button key={num} className={btnClass}>{num}</button>;
+            })
             <button onClick={() => setPage((p) => Math.min(lastPage, p + 1))} disabled={page === lastPage} className="ml-1">Next</button>
           </div>
         )}
