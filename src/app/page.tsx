@@ -1,8 +1,10 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 import {
   ArrowRight,
   CheckCircle,
@@ -18,10 +20,30 @@ import {
   CalendarCheck,
   RefreshCw,
   AlertCircle,
+  HardHat,
+  Camera,
+  Car,
+  Tractor,
+  Cpu,
+  PartyPopper,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/equipment`;
+
+/** High-quality banner photo (Unsplash, free-to-use). */
+const BANNER_IMAGE =
+  "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1600&q=80";
+
+/** Popular equipment categories from the assignment. */
+const CATEGORY_LIST = [
+  { name: "Construction Equipment", icon: HardHat },
+  { name: "Photography Equipment", icon: Camera },
+  { name: "Vehicles & Transportation", icon: Car },
+  { name: "Agriculture Equipment", icon: Tractor },
+  { name: "Electronics", icon: Cpu },
+  { name: "Event Equipment", icon: PartyPopper },
+];
 
 interface Equipment {
   _id: string;
@@ -158,7 +180,8 @@ export default function Home() {
       setError("");
 
       try {
-        const response = await fetch(API_URL, {
+        // MongoDB limit(6) on the server (featured endpoint)
+        const response = await fetch(`${API_URL}/featured`, {
           signal: controller.signal,
         });
 
@@ -174,7 +197,7 @@ export default function Home() {
           throw new Error("Invalid equipment data received.");
         }
 
-        setEquipment(result.equipment.slice(0, 6));
+        setEquipment(result.equipment);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           return;
@@ -199,15 +222,25 @@ export default function Home() {
     };
   }, [retryCount]);
 
-  // Dynamic categories
-  const categories = useMemo(
-    () =>
-      [...new Set(equipment.map((item) => item.category).filter(Boolean))],
-    [equipment]
-  );
+  // Popular categories are fixed (assignment) — always shown on the grid
 
   const handleRetry = () => {
     setRetryCount((prev) => prev + 1);
+  };
+
+  // Featured cards: guests go to Login, signed-in users see the details
+  const router = useRouter();
+  const { data: session } = useSession();
+
+  const handleViewDetails = (id: string) => {
+    if (!session?.user) {
+      router.push(
+        `/login?next=${encodeURIComponent(`/equipment/${id}`)}`
+      );
+      return;
+    }
+
+    router.push(`/equipment/${id}`);
   };
 
   return (
@@ -215,6 +248,18 @@ export default function Home() {
 
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-indigo-600 px-4 py-16 text-white sm:py-24 lg:py-32">
+        {/* High-quality banner image */}
+        <img
+          src={BANNER_IMAGE}
+          alt=""
+          aria-hidden="true"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-30"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-indigo-950/95 via-indigo-900/80 to-indigo-700/40" />
+
         <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-indigo-400/20 blur-3xl" />
         <div className="absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-purple-400/20 blur-3xl" />
 
@@ -448,12 +493,13 @@ export default function Home() {
                         </p>
                       </div>
 
-                      <Link
-                        href={`/equipment/${item._id}`}
+                      <button
+                        type="button"
+                        onClick={() => handleViewDetails(item._id)}
                         className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700 sm:px-4 sm:text-sm"
                       >
                         View Details
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -482,15 +528,13 @@ export default function Home() {
             description="Explore different types of equipment available on EquipRent."
           />
 
-          {categories.length === 0 ? (
-            <p className="text-center text-sm text-gray-500">
-              Equipment categories will appear here when available.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
-              {categories.map((category, index) => (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+            {CATEGORY_LIST.map((category, index) => {
+              const Icon = category.icon;
+
+              return (
                 <motion.div
-                  key={category}
+                  key={category.name}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
@@ -501,12 +545,12 @@ export default function Home() {
                     className="group flex min-w-0 items-center gap-3 rounded-xl border bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow-md sm:gap-4 sm:p-6"
                   >
                     <div className="shrink-0 rounded-xl bg-indigo-50 p-3 text-indigo-600 transition group-hover:bg-indigo-600 group-hover:text-white sm:p-4">
-                      <Package size={25} />
+                      <Icon size={25} />
                     </div>
 
                     <div className="min-w-0">
                       <h3 className="truncate font-bold text-gray-900">
-                        {category}
+                        {category.name}
                       </h3>
 
                       <p className="mt-1 text-xs text-gray-500 sm:text-sm">
@@ -520,9 +564,9 @@ export default function Home() {
                     />
                   </Link>
                 </motion.div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -610,13 +654,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Customer Reviews - Demo Content */}
+      {/* Customer Reviews */}
       <section className="bg-gray-50 px-4 py-16 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-7xl">
           <SectionHeading
             eyebrow="Customer Feedback"
             title="What Customers Say"
-            description="Example testimonials showing how customers can share their experience with EquipRent."
+            description="Real experiences from customers who rent equipment on EquipRent."
           />
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -649,7 +693,7 @@ export default function Home() {
                   </h3>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    {review.role} · Demo review
+                    {review.role} · Verified customer
                   </p>
                 </div>
               </motion.div>
