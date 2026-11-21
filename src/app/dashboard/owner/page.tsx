@@ -12,6 +12,8 @@ import {
   Loader2,
 } from "lucide-react";
 
+import OwnerAnalytics from "@/components/dashboard/owner-analytics";
+
 interface Equipment {
   _id: string;
   name: string;
@@ -190,6 +192,11 @@ fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
             );
           })}
         </div>
+
+        {/* Business Analytics (Challenge 3) */}
+        <section className="mt-8">
+          <OwnerAnalytics />
+        </section>
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">

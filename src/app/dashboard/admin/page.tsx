@@ -18,6 +18,8 @@ import {
   CreditCard,
 } from "lucide-react";
 
+import AdminAnalytics from "@/components/dashboard/admin-analytics";
+
 interface Equipment {
   _id: string;
   name: string;
@@ -352,6 +354,11 @@ export default function AdminDashboard() {
             Manage All Bookings
           </Link>
         </div>
+
+        {/* Platform Analytics (Challenge 3) */}
+        <section className="mt-10">
+          <AdminAnalytics />
+        </section>
 
         {/* Booking Overview */}
         <section className="mt-10">
