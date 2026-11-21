@@ -202,7 +202,7 @@ fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/owner-bookings`, {
             </p>
 
             <Link
-              href="/dashboard/owner/add-requirement"
+              href="/dashboard/owner/add-equipment"
               className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Add Equipment

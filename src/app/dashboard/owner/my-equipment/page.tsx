@@ -143,7 +143,7 @@ export default function MyEquipmentPage() {
             </button>
 
             <Link
-              href="/dashboard/owner/add-requirement"
+              href="/dashboard/owner/add-equipment"
               className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700"
             >
               <Plus className="h-4 w-4" />
@@ -204,7 +204,7 @@ export default function MyEquipmentPage() {
               You have not added any equipment yet.
             </p>
             <Link
-              href="/dashboard/owner/add-requirement"
+              href="/dashboard/owner/add-equipment"
               className="mt-5 inline-flex rounded-lg bg-indigo-600 px-5 py-3 text-white"
             >
               Add Your First Equipment
