@@ -2,6 +2,10 @@
 
 EquipRent is a full-stack equipment rental platform that allows users to explore equipment, manage bookings, and make secure online payments.
 
+## Project Purpose
+
+EquipRent allows equipment owners to list their equipment for rent and enables customers to browse, book and rent equipment for a specific period — with secure online payments and administrative management. This repository contains the Next.js (App Router) frontend.
+
 ## Live Demo
 
 **Live Website:** https://equip-rent-client.vercel.app/
@@ -15,15 +19,20 @@ EquipRent is a full-stack equipment rental platform that allows users to explore
 
 ## Features
 
-- Browse available rental equipment
-- User registration and login
+- Home page with hero banner, 6 featured equipment items (MongoDB `limit(6)`), popular categories, Why Choose Us, customer reviews and extra animated sections
+- Browse all approved equipment in a 3-column card grid
+- **Server-side search, filters, sorting and pagination** on All Equipment (search by name/category/location, category, rental type, price range, availability, price sort)
+- Equipment details page (private) with owner information, favorites and a booking modal
+- User registration and login (email/password with password-policy validation)
 - Google authentication
-- Equipment search and filtering
 - Add and manage favorite equipment
-- Create and manage rental bookings
-- Secure online payments with Stripe Checkout
-- User account and booking management
-- Responsive user interface
+- Create and manage rental bookings with Stripe Checkout payments
+- Role-based dashboards (Customer, Owner, Admin) built as responsive data tables
+- Admin & Owner analytics dashboards with KPI cards and recharts graphs (monthly bookings, revenue and earnings)
+- Profile page with editable name, photo, phone and address (imgbb image upload)
+- Booking history and All Equipment pagination
+- Dark / light **theme toggle** saved in localStorage (no flash on load)
+- Loading, error and 404 pages, responsive UI, About & Contact pages, X (new logo) socials in the footer
 
 ## Technologies Used
 
@@ -34,6 +43,7 @@ EquipRent is a full-stack equipment rental platform that allows users to explore
 - Better Auth
 - Base UI
 - Framer Motion
+- Recharts
 - Lucide React
 - React Hot Toast
 - Stripe integration
