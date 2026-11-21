@@ -2,11 +2,29 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import toast from "react-hot-toast";
+
 import { signUp, signIn } from "@/lib/auth-client";
+
+/** Assignment rules: uppercase + lowercase + at least 6 characters. */
+const validatePassword = (password: string): string | null => {
+  if (password.length < 6) {
+    return "Password must be at least 6 characters long.";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Password must contain an uppercase letter.";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Password must contain a lowercase letter.";
+  }
+  return null;
+};
 
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [photo, setPhoto] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,6 +33,14 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      toast.error(passwordError);
+      setMessage(passwordError);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -22,6 +48,7 @@ export default function SignupPage() {
         name,
         email,
         password,
+        ...(photo.trim() ? { image: photo.trim() } : {}),
       });
 
       if (error) {
@@ -29,7 +56,7 @@ export default function SignupPage() {
         return;
       }
 
-      // Redirect to Home Page
+      toast.success("Account created successfully! Welcome to EquipRent.");
       window.location.replace("/");
     } catch {
       setMessage("Something went wrong!");
@@ -55,7 +82,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-8">
       <form
         onSubmit={handleSignup}
         className="w-full max-w-md space-y-4 rounded-xl bg-white p-8 shadow"
@@ -105,6 +132,15 @@ export default function SignupPage() {
           className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
         />
 
+        {/* Photo (direct image link) */}
+        <input
+          type="url"
+          placeholder="Photo URL (optional)"
+          value={photo}
+          onChange={(e) => setPhoto(e.target.value)}
+          className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
+        />
+
         {/* Password */}
         <input
           type="password"
@@ -115,6 +151,10 @@ export default function SignupPage() {
           minLength={6}
           className="w-full rounded-lg border p-3 outline-none focus:border-blue-500"
         />
+        <p className="-mt-2 text-xs text-gray-500">
+          Must contain an uppercase letter, a lowercase letter and be at
+          least 6 characters.
+        </p>
 
         {/* Signup Button */}
         <button
@@ -130,6 +170,17 @@ export default function SignupPage() {
             {message}
           </p>
         )}
+
+        {/* Link to Login */}
+        <p className="text-center text-sm text-gray-500">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-medium text-blue-600 hover:underline"
+          >
+            Login
+          </Link>
+        </p>
       </form>
     </div>
   );
@@ -148,7 +199,7 @@ function GoogleIcon() {
       />
       <path
         fill="#FBBC05"
-        d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z"
+        d="M10.53 28.59A14.4 14.4 0 0 0 9.75 24c0-1.59.27-3.13.76-4.59l-7.98 6.19A8.64 8.64 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z"
       />
       <path
         fill="#34A853"
