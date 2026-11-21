@@ -48,7 +48,10 @@ export default function Navbar() {
 
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "Equipment", href: "/equipment" },
+    { name: "All Equipment", href: "/equipment" },
+    { name: "About Us", href: "/about" },
+    { name: "How it Works", href: "/#how-it-works" },
+    { name: "Contact Us", href: "/contact" },
   ];
 
   const dashboardHref =
