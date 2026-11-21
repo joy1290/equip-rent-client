@@ -1,8 +1,12 @@
+
 import { NextResponse } from "next/server";
 
-// In-memory dashboard data store (for development; replace with DB in production)
-let equipmentStore = [
-  // Sample equipment for stats calculation
+// Force dynamic rendering because this route uses request.url
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+// In-memory dashboard data store (development only)
+const equipmentStore = [
   {
     id: "1",
     name: "Excavator",
@@ -65,7 +69,7 @@ let equipmentStore = [
   },
 ];
 
-let bookingsStore = [
+const bookingsStore = [
   {
     id: "1",
     userId: "customer1",
@@ -104,41 +108,56 @@ let bookingsStore = [
   },
 ];
 
-let usersStore = [
-  { id: "1", name: "Admin User", email: "admin@equiprent.com", role: "admin" },
-  { id: "2", name: "Test Owner", email: "owner@equiprent.com", role: "owner" },
-  { id: "3", name: "Test Customer", email: "customer@equiprent.com", role: "customer" },
+const usersStore = [
+  {
+    id: "1",
+    name: "Admin User",
+    email: "admin@equiprent.com",
+    role: "admin",
+  },
+  {
+    id: "2",
+    name: "Test Owner",
+    email: "owner@equiprent.com",
+    role: "owner",
+  },
+  {
+    id: "3",
+    name: "Test Customer",
+    email: "customer@equiprent.com",
+    role: "customer",
+  },
 ];
 
-// GET /api/dashboard/* - Dispatch based on pathname
-// This route uses request.url for path routing, so it must be dynamic
-export const dynamic = "force-dynamic";
+const bookingsFilter = bookingsStore.filter(
+  (booking) => booking.paymentStatus !== undefined
+);
 
+// GET /api/dashboard/*
 export async function GET(request: Request) {
   try {
-    // Use the searchParams from the incoming request
     const url = new URL(request.url);
-    const pathname = url.pathname; // /api/dashboard/stats, /api/dashboard/owner, /api/dashboard/admin/all-rentals
+    const pathname = url.pathname;
 
-    // Stats endpoint
     if (pathname === "/api/dashboard/stats") {
-      return await getStatsHandler(request);
+      return getStatsHandler();
     }
 
-    // Owner endpoint
     if (pathname === "/api/dashboard/owner") {
-      return await getOwnerHandler(request);
+      return getOwnerHandler(request);
     }
 
-    // Admin all-rentals endpoint
     if (pathname === "/api/dashboard/admin/all-rentals") {
-      return await getAllRentalsHandler(request);
+      return getAllRentalsHandler(request);
     }
 
-    // Default: not found
-    return NextResponse.json({ error: "Dashboard endpoint not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Dashboard endpoint not found" },
+      { status: 404 }
+    );
   } catch (error) {
     console.error("Error fetching dashboard data:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch dashboard data" },
       { status: 500 }
@@ -146,55 +165,57 @@ export async function GET(request: Request) {
   }
 }
 
-// GET /api/dashboard/stats - Get overall platform statistics
-async function getStatsHandler(request: Request) {
+// Dashboard statistics
+async function getStatsHandler() {
   try {
     const totalUsers = usersStore.length;
-    const totalEquipment = equipmentStore.filter(
-      (item) => item.status === "Approved"
-    ).length;
-    const totalBookings = bookingsStore.length;
-    const pendingEquipment = equipmentStore.filter(
-      (item) => item.status === "Pending"
-    ).length;
+
     const approvedEquipment = equipmentStore.filter(
       (item) => item.status === "Approved"
     ).length;
+
+    const pendingEquipment = equipmentStore.filter(
+      (item) => item.status === "Pending"
+    ).length;
+
     const rejectedEquipment = equipmentStore.filter(
       (item) => item.status === "Rejected"
     ).length;
-    const paidBookings = bookingsFilter.filter(
-      (b) => b.paymentStatus === "Paid"
-    ).length;
-    const totalRevenue = bookingsFilter
-      .filter((b) => b.paymentStatus === "Paid")
-      .reduce((sum, b) => sum + b.totalAmount, 0);
 
-    // Monthly booking stats (current month)
-    const now = new Date();
-    const currentMonthBookings = bookingsFilter.filter(
-      (b) => {
-        const date = new Date(b.createdAt);
-        return (
-          date.getFullYear() === now.getFullYear() &&
-          date.getMonth() === now.getMonth()
-        );
-      }
+    const paidBookings = bookingsFilter.filter(
+      (booking) => booking.paymentStatus === "Paid"
     );
+
+    const totalRevenue = paidBookings.reduce(
+      (sum, booking) => sum + booking.totalAmount,
+      0
+    );
+
+    const now = new Date();
+
+    const monthlyBookings = bookingsFilter.filter((booking) => {
+      const date = new Date(booking.createdAt);
+
+      return (
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth()
+      );
+    }).length;
 
     return NextResponse.json({
       totalUsers,
-      totalEquipment,
-      totalBookings,
+      totalEquipment: approvedEquipment,
+      totalBookings: bookingsStore.length,
       pendingEquipment,
       approvedEquipment,
       rejectedEquipment,
-      paidBookings,
+      paidBookings: paidBookings.length,
       totalRevenue,
-      monthlyBookings: currentMonthBookings.length,
+      monthlyBookings,
     });
   } catch (error) {
     console.error("Error fetching dashboard stats:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch dashboard stats" },
       { status: 500 }
@@ -202,16 +223,11 @@ async function getStatsHandler(request: Request) {
   }
 }
 
-// Helper to filter bookings by payment status
-const bookingsFilter = bookingsStore.filter(
-  (b) => b.paymentStatus !== undefined
-);
-
-// GET /api/dashboard/owner - Get owner's dashboard stats
+// Owner dashboard
 async function getOwnerHandler(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const ownerId = searchParams.get("ownerId") || "";
+    const ownerId = searchParams.get("ownerId");
 
     if (!ownerId) {
       return NextResponse.json(
@@ -220,48 +236,49 @@ async function getOwnerHandler(request: Request) {
       );
     }
 
-    // Get owner's equipment
     const ownerEquipment = equipmentStore.filter(
       (item) => item.ownerId === ownerId
     );
 
-    const totalListedEquipment = ownerEquipment.length;
-    const ownerBookings = bookingsFilter.filter(
-      (b) => b.userId !== ownerId
+    const ownerEquipmentIds = ownerEquipment.map(
+      (equipment) => equipment.id
     );
 
-    // Simplified: count bookings where equipment matches owner's equipment
-    const ownerEquipmentIds = ownerEquipment.map((e) => e.id);
-    const ownerRentals = bookingsFilter.filter((b) =>
-      ownerEquipmentIds.includes(b.equipmentId)
+    const ownerRentals = bookingsFilter.filter((booking) =>
+      ownerEquipmentIds.includes(booking.equipmentId)
     );
 
-    const completedRentals = ownerRentals.filter(
-      (b) => b.paymentStatus === "Paid"
-    ).length;
-    const totalEarnings = ownerRentals
-      .filter((b) => b.paymentStatus === "Paid")
-      .reduce((sum, b) => sum + b.totalAmount, 0);
+    const paidRentals = ownerRentals.filter(
+      (booking) => booking.paymentStatus === "Paid"
+    );
 
-    // Monthly earnings
+    const totalEarnings = paidRentals.reduce(
+      (sum, booking) => sum + booking.totalAmount,
+      0
+    );
+
     const now = new Date();
-    const monthlyEarnings = ownerRentals
-      .filter(
-        (b) =>
-          new Date(b.createdAt).getFullYear() === now.getFullYear() &&
-          new Date(b.createdAt).getMonth() === now.getMonth() &&
-          b.paymentStatus === "Paid"
-      )
-      .reduce((sum, b) => sum + b.totalAmount, 0);
+
+    const monthlyEarnings = paidRentals
+      .filter((booking) => {
+        const date = new Date(booking.createdAt);
+
+        return (
+          date.getFullYear() === now.getFullYear() &&
+          date.getMonth() === now.getMonth()
+        );
+      })
+      .reduce((sum, booking) => sum + booking.totalAmount, 0);
 
     return NextResponse.json({
-      totalListedEquipment,
-      completedRentals,
+      totalListedEquipment: ownerEquipment.length,
+      completedRentals: paidRentals.length,
       totalEarnings,
       monthlyEarnings,
     });
   } catch (error) {
     console.error("Error fetching owner dashboard stats:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch owner dashboard stats" },
       { status: 500 }
@@ -269,33 +286,48 @@ async function getOwnerHandler(request: Request) {
   }
 }
 
-// GET /api/dashboard/admin/all-rentals - Get all rentals (Admin only)
+// Admin rentals
 async function getAllRentalsHandler(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+
     const status = searchParams.get("status") || "";
     const paymentStatus = searchParams.get("paymentStatus") || "";
 
     let rentals = [...bookingsStore];
 
     if (status) {
-      rentals = rentals.filter((b) => b.bookingStatus === status);
+      rentals = rentals.filter(
+        (booking) => booking.bookingStatus === status
+      );
     }
 
     if (paymentStatus) {
-      rentals = rentals.filter((b) => b.paymentStatus === paymentStatus);
+      rentals = rentals.filter(
+        (booking) => booking.paymentStatus === paymentStatus
+      );
     }
 
-    // Enrich with user and equipment info
-    const enrichedRentals = rentals.map((b) => {
-      const user = usersStore.find((u) => u.id === b.userId);
-      const equipment = equipmentStore.find((e) => e.id === b.equipmentId);
-      return { ...b, user, equipment };
+    const enrichedRentals = rentals.map((booking) => {
+      const user = usersStore.find(
+        (item) => item.id === booking.userId
+      );
+
+      const equipment = equipmentStore.find(
+        (item) => item.id === booking.equipmentId
+      );
+
+      return {
+        ...booking,
+        user,
+        equipment,
+      };
     });
 
     return NextResponse.json(enrichedRentals);
   } catch (error) {
     console.error("Error fetching all rentals:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch all rentals" },
       { status: 500 }
