@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -137,7 +136,14 @@ function EquipmentDetailsContent() {
           signal: controller.signal,
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+          // Handle unauthorized gracefully - redirect to login
+          if (session?.user) {
+            // Show error but don't redirect if already logged in
+            toast.error("Could not load favorites. Please try again.");
+          }
+          return;
+        }
 
         const data = await response.json();
 
@@ -148,8 +154,9 @@ function EquipmentDetailsContent() {
             )
           );
         }
-      } catch {
+      } catch (err) {
         // Favorites are non-critical — ignore load failures
+        console.error("Favorite load error:", err);
       }
     };
 
@@ -305,9 +312,20 @@ function EquipmentDetailsContent() {
       const bookingData = await bookingResponse.json();
 
       if (!bookingResponse.ok) {
-        throw new Error(
-          bookingData.message || "Booking failed."
-        );
+        // Handle specific errors gracefully
+        const errorMsg = bookingData.message || "Booking failed.";
+        
+        // Provide helpful user feedback based on error type
+        if (!bookingData.success) {
+          // Server validation failed - show the specific error
+          toast.error(errorMsg);
+        } else if (errorMsg.includes("clipboard") || errorMsg.includes("permission")) {
+          toast.error("System error. Please try again or contact support.");
+        } else {
+          toast.error(errorMsg);
+        }
+        setSubmitting(false);
+        return;
       }
 
       // 2. Create the Stripe Checkout session for this booking
@@ -324,13 +342,24 @@ function EquipmentDetailsContent() {
       const checkoutData = await checkoutResponse.json();
 
       if (!checkoutResponse.ok) {
-        throw new Error(
-          checkoutData.message || "Could not start payment."
-        );
+        const errorMsg = checkoutData.message || "Could not start payment.";
+        
+        if (errorMsg.includes("clipboard") || errorMsg.includes("permission")) {
+          toast.error("Payment system error. Please try again or contact support.");
+        } else if (!checkoutData.success) {
+          // Payment session failed - show the specific error
+          toast.error(errorMsg);
+        } else {
+          toast.error(errorMsg);
+        }
+        setSubmitting(false);
+        return;
       }
 
       if (!checkoutData.checkoutUrl) {
-        throw new Error("Payment session was not created.");
+        toast.error("Payment session was not created.");
+        setSubmitting(false);
+        return;
       }
 
       toast.success("Booking created! Redirecting to secure payment...");
@@ -414,9 +443,7 @@ function EquipmentDetailsContent() {
 
               <span
                 className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${
-                  inStock
-                    ? "bg-green-50 text-green-700"
-                    : "bg-red-50 text-red-600"
+                  inStock ? "bg-green-50 text-green-700" : "bg-red-50 text-red-500"
                 }`}
               >
                 {inStock ? "Available" : "Out of Stock"}
@@ -425,7 +452,7 @@ function EquipmentDetailsContent() {
 
             <h1 className="mt-4 break-words text-2xl font-bold text-gray-900 sm:text-3xl">
               {equipment.name}
-            </h1>
+            </p>
 
             <p className="mt-3 leading-relaxed text-gray-600">
               {equipment.description}
@@ -467,7 +494,7 @@ function EquipmentDetailsContent() {
                   src={owner.image}
                   alt={owner.name || "Owner"}
                   className="h-11 w-11 rounded-full object-cover"
-                />
+                )
               ) : (
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 font-semibold text-white">
                   {(owner?.name || "O").charAt(0).toUpperCase()}
@@ -517,236 +544,235 @@ function EquipmentDetailsContent() {
                     {isFavorite ? "Saved" : "Add to Favorites"}
                   </button>
                 )}
+
+                {/* Rental Terms */}
+                <div className="mt-5">
+                  <h2 className="font-semibold text-gray-900">
+                    Rental Terms & Conditions
+                  </h2>
+
+                  <p className="mt-2 whitespace-pre-line leading-relaxed text-gray-600">
+                    {equipment.rentalTerms}
+                  </p>
+                </div>
+
+                {/* Booking Button */}
+                <button
+                  disabled={!inStock}
+                  onClick={handleBookNow}
+                  className="mt-7 w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {inStock ? "Book Now" : "Not Available"}
+                </button>
               </div>
-
-              {/* Rental Terms */}
-              <div className="mt-5">
-                <h2 className="font-semibold text-gray-900">
-                  Rental Terms & Conditions
-                </h2>
-
-                <p className="mt-2 whitespace-pre-line leading-relaxed text-gray-600">
-                  {equipment.rentalTerms}
-                </p>
-              </div>
-
-              {/* Booking Button */}
-              <button
-                disabled={!inStock}
-                onClick={handleBookNow}
-                className="mt-7 w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-              >
-                {inStock ? "Book Now" : "Not Available"}
-              </button>
-
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Booking Modal */}
-      {showBooking && equipment && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8"
-          onClick={() => {
-            if (!submitting) setShowBooking(false);
-          }}
-        >
+        {/* Booking Modal */}
+        {showBooking && equipment && (
           <div
-            className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8"
+            onClick={() => {
+              if (!submitting) setShowBooking(false);
+            }}
           >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 sm:text-xl">
-                  Book Equipment
-                </h2>
+            <div
+              className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 sm:text-xl">
+                    Book Equipment
+                  </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  {equipment.name} · ৳{equipment.rentalPrice}/
-                  {equipment.rentalType}
-                </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {equipment.name} · ৳{equipment.rentalPrice}/
+                    {equipment.rentalType}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Close"
+                  disabled={submitting}
+                  onClick={() => setShowBooking(false)}
+                  className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              <button
-                type="button"
-                aria-label="Close"
-                disabled={submitting}
-                onClick={() => setShowBooking(false)}
-                className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
+              {/* Modal Body */}
+              <div className="mt-5 space-y-4">
+                {formError && (
+                  <p
+                    role="alert"
+                    className="rounded-lg bg-red-50 p-3 text-sm text-red-600"
+                  >
+                    {formError}
+                  </p>
+                )
 
-            {/* Modal Body */}
-            <div className="mt-5 space-y-4">
-              {formError && (
-                <p
-                  role="alert"
-                  className="rounded-lg bg-red-50 p-3 text-sm text-red-600"
-                >
-                  {formError}
-                </p>
-              )}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Rental Start Date *
+                    </label>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Rental Start Date *
-                  </label>
+                    <input
+                      type="date"
+                      min={today()}
+                      value={form.startDate}
+                      onChange={(e) =>
+                        setForm({ ...form, startDate: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
 
-                  <input
-                    type="date"
-                    min={today()}
-                    value={form.startDate}
-                    onChange={(e) =>
-                      setForm({ ...form, startDate: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Rental End Date *
+                    </label>
+
+                    <input
+                      type="date"
+                      min={form.startDate || today()}
+                      value={form.endDate}
+                      onChange={(e) =>
+                        setForm({ ...form, endDate: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Required Quantity *
+                    </label>
+
+                    <input
+                      type="number"
+                      min="1"
+                      max={equipment.availableQuantity}
+                      value={form.quantity}
+                      onChange={(e) =>
+                        setForm({ ...form, quantity: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Contact Number *
+                    </label>
+
+                    <input
+                      type="tel"
+                      value={form.contactNumber}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          contactNumber: e.target.value,
+                        })
+                      }
+                      placeholder="01XXXXXXXXX"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Rental End Date *
+                    Delivery Address *
                   </label>
 
-                  <input
-                    type="date"
-                    min={form.startDate || today()}
-                    value={form.endDate}
-                    onChange={(e) =>
-                      setForm({ ...form, endDate: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Required Quantity *
-                  </label>
-
-                  <input
-                    type="number"
-                    min="1"
-                    max={equipment.availableQuantity}
-                    value={form.quantity}
-                    onChange={(e) =>
-                      setForm({ ...form, quantity: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Contact Number *
-                  </label>
-
-                  <input
-                    type="tel"
-                    value={form.contactNumber}
+                  <textarea
+                    rows={2}
+                    value={form.deliveryAddress}
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        contactNumber: e.target.value,
+                        deliveryAddress: e.target.value,
                       })
                     }
-                    placeholder="01XXXXXXXXX"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Enter your complete delivery address"
+                    className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Additional Notes
+                  </label>
+
+                  <textarea
+                    rows={2}
+                    value={form.additionalNotes}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        additionalNotes: e.target.value,
+                      })
+                    }
+                    placeholder="Any additional information..."
+                    className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                {/* Calculated Total */}
+                <div className="rounded-xl bg-blue-50 p-4">
+                  <p className="text-sm text-gray-600">
+                    Total Rental Amount
+                  </p>
+
+                  <p className="mt-1 text-2xl font-bold text-blue-700">
+                    ৳{totalAmount.toLocaleString("en-BD")}
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    Duration × quantity, calculated and validated by the
+                    server.
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Delivery Address *
-                </label>
+              {/* Modal Footer */}
+              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => setShowBooking(false)}
+                  className="rounded-lg border px-5 py-2.5 font-medium transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
 
-                <textarea
-                  rows={2}
-                  value={form.deliveryAddress}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      deliveryAddress: e.target.value,
-                    })
-                  }
-                  placeholder="Enter your complete delivery address"
-                  className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
+                <button
+                  type="button"
+                  disabled={submitting || totalAmount <= 0}
+                  onClick={confirmBooking}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {submitting && (
+                    <Loader2 size={17} className="animate-spin" />
+                  )}
+                  {submitting
+                    ? "Redirecting to payment..."
+                    : "Confirm & Pay with Stripe"}
+                </button>
               </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Additional Notes
-                </label>
-
-                <textarea
-                  rows={2}
-                  value={form.additionalNotes}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      additionalNotes: e.target.value,
-                    })
-                  }
-                  placeholder="Any additional information..."
-                  className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-
-              {/* Calculated Total */}
-              <div className="rounded-xl bg-blue-50 p-4">
-                <p className="text-sm text-gray-600">
-                  Total Rental Amount
-                </p>
-
-                <p className="mt-1 text-2xl font-bold text-blue-700">
-                  ৳{totalAmount.toLocaleString("en-BD")}
-                </p>
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Duration × quantity, calculated and validated by the
-                  server.
-                </p>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => setShowBooking(false)}
-                className="rounded-lg border px-5 py-2.5 font-medium transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                disabled={submitting || totalAmount <= 0}
-                onClick={confirmBooking}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-              >
-                {submitting && (
-                  <Loader2 size={17} className="animate-spin" />
-                )}
-                {submitting
-                  ? "Redirecting to payment..."
-                  : "Confirm & Pay with Stripe"}
-              </button>
             </div>
           </div>
         </div>
-      )}
-    </main>
+      </main>
+    );
   );
 }
 

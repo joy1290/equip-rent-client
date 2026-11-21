@@ -41,7 +41,11 @@ export default function MyFavoritesPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to load favorites");
+        if (data.message === "Unauthorized. Please login first.") {
+          router.replace("/login");
+        } else {
+          throw new Error(data.message || "Failed to load favorites");
+        }
       }
 
       setFavorites(data.favorites || []);
