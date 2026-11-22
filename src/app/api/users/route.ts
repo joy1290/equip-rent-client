@@ -1,73 +1,62 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-// In-memory user store (for development; replace with DB in production)
-let usersStore = [
-  {
-    id: "1",
-    name: "Admin User",
-    email: "admin@equiprent.com",
-    role: "admin",
-    image: "/placeholder-user.jpg",
-  },
-  {
-    id: "2",
-    name: "Test Owner",
-    email: "owner@equiprent.com",
-    role: "owner",
-    image: "/placeholder-user.jpg",
-  },
-  {
-    id: "3",
-    name: "Test Customer",
-    email: "customer@equiprent.com",
-    role: "customer",
-    image: "/placeholder-user.jpg",
-  },
-];
+const BACKEND_URL = process.env.BACKEND_API_URL;
 
-// GET /api/users - Get all users (Admin only)
-export async function GET(request: Request) {
-  try {
-    return NextResponse.json(usersStore);
-  } catch (error) {
-    console.error("Error fetching users:", error);
+async function handleRequest(request: NextRequest) {
+  if (!BACKEND_URL) {
     return NextResponse.json(
-      { error: "Failed to fetch users" },
+      { success: false, message: "BACKEND_API_URL is missing" },
       { status: 500 }
+    );
+  }
+
+  try {
+    const path = new URL(request.url).pathname.replace(/^\/api\/users/, "");
+    const headers = new Headers();
+
+    const cookie = request.headers.get("cookie");
+    if (cookie) headers.set("cookie", cookie);
+
+    const authorization = request.headers.get("authorization");
+    if (authorization) headers.set("authorization", authorization);
+
+    const method = request.method;
+    let body: string | undefined;
+
+    if (method === "PATCH") {
+      headers.set("Content-Type", "application/json");
+      body = await request.text();
+    }
+
+    const response = await fetch(
+      `${BACKEND_URL}/users${path}`,
+      {
+        method,
+        headers,
+        body,
+        cache: "no-store",
+      }
+    );
+
+    const data = await response.json();
+
+    return NextResponse.json(data, {
+      status: response.status,
+    });
+  } catch (error) {
+    console.error("Users proxy error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Backend connection failed" },
+      { status: 502 }
     );
   }
 }
 
-// PATCH /api/users/:id/role - Change user role (Admin only)
-export async function PATCH(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id") || "";
-    const role = searchParams.get("role") || "";
+export async function GET(request: NextRequest) {
+  return handleRequest(request);
+}
 
-    if (!id || !["customer", "owner", "admin"].includes(role)) {
-      return NextResponse.json(
-        { error: "Invalid user ID or role" },
-        { status: 400 }
-      );
-    }
-
-    const user = usersStore.find((u) => u.id === id);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    user.role = role;
-
-    return NextResponse.json(user);
-  } catch (error) {
-    console.error("Error updating user role:", error);
-    return NextResponse.json(
-      { error: "Failed to update user role" },
-      { status: 500 }
-    );
-  }
+export async function PATCH(request: NextRequest) {
+  return handleRequest(request);
 }

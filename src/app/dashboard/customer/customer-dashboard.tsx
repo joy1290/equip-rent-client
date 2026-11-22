@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import Link from "next/link";
 import {
@@ -17,9 +17,10 @@ import {
   ArrowRight,
   Package,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/bookings`;
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface Booking {
   _id: string;
@@ -31,6 +32,12 @@ interface Booking {
   paymentStatus: string;
   bookingStatus: string;
   createdAt: string;
+}
+
+interface BookingResponse {
+  success: boolean;
+  message?: string;
+  data: Booking[];
 }
 
 const dashboardCards = [
@@ -64,6 +71,8 @@ const formatAmount = (amount: number) =>
   `৳${Number(amount || 0).toLocaleString("en-BD")}`;
 
 const formatDate = (date: string) => {
+  if (!date) return "Date unavailable";
+
   const parsedDate = new Date(date);
 
   if (Number.isNaN(parsedDate.getTime())) {
@@ -74,67 +83,83 @@ const formatDate = (date: string) => {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
+};
+
+const getStatusStyle = (status: string) => {
+  switch (status) {
+    case "Confirmed":
+      return "bg-green-50 text-green-700";
+    case "Completed":
+      return "bg-blue-50 text-blue-700";
+    case "Cancelled":
+      return "bg-red-50 text-red-700";
+    case "Pending":
+      return "bg-yellow-50 text-yellow-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
 };
 
 export default function CustomerDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
 
   const { data: session } = useSession();
 
   // Fetch customer bookings
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const fetchBookings = async () => {
-      try {
+  const fetchBookings = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-        setError("");
-
-        const response = await fetch(`${API_URL}/my-bookings`, {
-          credentials: "include",
-          signal: controller.signal,
-        });
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Failed to load dashboard"
-          );
-        }
-
-        if (!Array.isArray(result.data)) {
-          throw new Error("Invalid booking data received");
-        }
-
-        setBookings(result.data);
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          return;
-        }
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Something went wrong"
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
       }
-    };
 
+      setError("");
+
+      const response = await fetch(`${API_URL}/bookings/my-bookings`, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const result: BookingResponse = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Failed to load customer dashboard."
+        );
+      }
+
+      if (!Array.isArray(result.data)) {
+        throw new Error("Invalid booking data received.");
+      }
+
+      setBookings(result.data);
+    } catch (err) {
+      console.error("Customer dashboard error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading dashboard."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchBookings();
 
-    return () => controller.abort();
-  }, [retry]);
+  }, [fetchBookings]);
 
-  // Fetch favorites
+  // Fetch customer favorites
   useEffect(() => {
     if (!session?.user) return;
 
@@ -143,7 +168,7 @@ export default function CustomerDashboard() {
     const fetchFavorites = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/equipment/favorites`,
+          `${API_URL}/equipment/favorites`,
           {
             credentials: "include",
             signal: controller.signal,
@@ -158,12 +183,18 @@ export default function CustomerDashboard() {
           localStorage.setItem(
             "customer_favorites",
             JSON.stringify(
-              data.favorites.map((favorite: { _id: string }) => favorite._id)
+              data.favorites.map(
+                (favorite: { _id: string }) => favorite._id
+              )
             )
           );
         }
-      } catch {
-        // Favorites are non-critical.
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+
+        console.error("Favorites fetch error:", err);
       }
     };
 
@@ -173,56 +204,79 @@ export default function CustomerDashboard() {
   }, [session?.user]);
 
   // Booking statistics
-  const totalBookings = bookings.length;
+  const statistics = useMemo(() => {
+    const totalBookings = bookings.length;
 
-  const pendingBookings = bookings.filter(
-    (booking) => booking.bookingStatus === "Pending"
-  ).length;
+    const pendingBookings = bookings.filter(
+      (booking) => booking.bookingStatus === "Pending"
+    ).length;
 
-  const confirmedBookings = bookings.filter(
-    (booking) => booking.bookingStatus === "Confirmed"
-  ).length;
+    const confirmedBookings = bookings.filter(
+      (booking) => booking.bookingStatus === "Confirmed"
+    ).length;
 
-  const cancelledBookings = bookings.filter(
-    (booking) => booking.bookingStatus === "Cancelled"
-  ).length;
+    const cancelledBookings = bookings.filter(
+      (booking) => booking.bookingStatus === "Cancelled"
+    ).length;
 
-  const paidAmount = bookings.reduce((total, booking) => {
-    if (booking.paymentStatus !== "Paid") return total;
+    const completedBookings = bookings.filter(
+      (booking) => booking.bookingStatus === "Completed"
+    ).length;
 
-    return total + Number(booking.totalAmount || 0);
-  }, 0);
+    const paidAmount = bookings.reduce((total, booking) => {
+      if (booking.paymentStatus !== "Paid") return total;
 
-  const recentBookings = [...bookings]
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
-    )
-    .slice(0, 5);
+      return total + Number(booking.totalAmount || 0);
+    }, 0);
+
+    return {
+      totalBookings,
+      pendingBookings,
+      confirmedBookings,
+      cancelledBookings,
+      completedBookings,
+      paidAmount,
+    };
+  }, [bookings]);
+
+  const recentBookings = useMemo(() => {
+    return [...bookings]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      )
+      .slice(0, 5);
+  }, [bookings]);
 
   const stats = [
     {
       title: "Total Bookings",
-      value: totalBookings,
+      value: statistics.totalBookings,
       icon: CalendarCheck,
       color: "bg-indigo-50 text-indigo-600",
     },
     {
       title: "Pending Bookings",
-      value: pendingBookings,
+      value: statistics.pendingBookings,
       icon: Clock,
       color: "bg-yellow-50 text-yellow-600",
     },
     {
       title: "Confirmed Bookings",
-      value: confirmedBookings,
+      value: statistics.confirmedBookings,
       icon: CheckCircle,
       color: "bg-green-50 text-green-600",
     },
     {
+      title: "Completed Bookings",
+      value: statistics.completedBookings,
+      icon: Package,
+      color: "bg-blue-50 text-blue-600",
+    },
+    {
       title: "Cancelled Bookings",
-      value: cancelledBookings,
+      value: statistics.cancelledBookings,
       icon: XCircle,
       color: "bg-red-50 text-red-600",
     },
@@ -231,17 +285,22 @@ export default function CustomerDashboard() {
   const statusData = [
     {
       label: "Confirmed",
-      count: confirmedBookings,
+      count: statistics.confirmedBookings,
       color: "bg-green-500",
     },
     {
       label: "Pending",
-      count: pendingBookings,
+      count: statistics.pendingBookings,
       color: "bg-yellow-500",
     },
     {
+      label: "Completed",
+      count: statistics.completedBookings,
+      color: "bg-blue-500",
+    },
+    {
       label: "Cancelled",
-      count: cancelledBookings,
+      count: statistics.cancelledBookings,
       color: "bg-red-500",
     },
   ];
@@ -251,38 +310,42 @@ export default function CustomerDashboard() {
       <div className="mx-auto max-w-7xl">
 
         {/* Header */}
-        <div className="mb-7 sm:mb-9">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl lg:text-4xl">
-            Customer Dashboard
-          </h1>
+        <div className="mb-7 flex flex-col justify-between gap-4 sm:mb-9 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl lg:text-4xl">
+              Customer Dashboard
+            </h1>
 
-          <p className="mt-2 text-sm text-gray-600 sm:text-base">
-            Welcome to your EquipRent dashboard.
-          </p>
+            <p className="mt-2 text-sm text-gray-600 sm:text-base">
+              Welcome to your EquipRent dashboard.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => fetchBookings(true)}
+            disabled={refreshing || loading}
+            className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw
+              size={16}
+              className={refreshing ? "animate-spin" : ""}
+            />
+            {refreshing ? "Refreshing..." : "Refresh Dashboard"}
+          </button>
         </div>
 
         {/* Analytics */}
         <section className="mb-8">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-5">
             <h2 className="text-lg font-bold text-gray-900 sm:text-xl">
               Booking Overview
             </h2>
-
-            {!loading && (
-              <button
-                type="button"
-                onClick={() => setRetry((prev) => prev + 1)}
-                className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
-              >
-                <RefreshCw size={15} />
-                Refresh
-              </button>
-            )}
           </div>
 
           {loading ? (
             <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border bg-white p-6 text-center shadow-sm">
-              <div className="h-9 w-9 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
+              <Loader2 className="h-9 w-9 animate-spin text-indigo-600" />
 
               <p className="mt-4 text-sm text-gray-500">
                 Loading booking analytics...
@@ -303,10 +366,14 @@ export default function CustomerDashboard() {
 
                 <button
                   type="button"
-                  onClick={() => setRetry((prev) => prev + 1)}
-                  className="flex shrink-0 items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                  onClick={() => fetchBookings(true)}
+                  disabled={refreshing}
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
                 >
-                  <RefreshCw size={16} />
+                  <RefreshCw
+                    size={16}
+                    className={refreshing ? "animate-spin" : ""}
+                  />
                   Try Again
                 </button>
               </div>
@@ -314,7 +381,7 @@ export default function CustomerDashboard() {
           ) : (
             <>
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-5">
                 {stats.map((stat) => {
                   const Icon = stat.icon;
 
@@ -334,9 +401,7 @@ export default function CustomerDashboard() {
                           </h3>
                         </div>
 
-                        <div
-                          className={`shrink-0 rounded-xl p-3 ${stat.color}`}
-                        >
+                        <div className={`shrink-0 rounded-xl p-3 ${stat.color}`}>
                           <Icon size={23} />
                         </div>
                       </div>
@@ -358,7 +423,7 @@ export default function CustomerDashboard() {
                     </p>
 
                     <h3 className="mt-1 break-words text-2xl font-bold text-gray-900 sm:text-3xl">
-                      {formatAmount(paidAmount)}
+                      {formatAmount(statistics.paidAmount)}
                     </h3>
                   </div>
                 </div>
@@ -370,7 +435,7 @@ export default function CustomerDashboard() {
                   Booking Status Overview
                 </h3>
 
-                {totalBookings === 0 ? (
+                {statistics.totalBookings === 0 ? (
                   <p className="text-sm text-gray-500">
                     No booking data available yet.
                   </p>
@@ -378,7 +443,7 @@ export default function CustomerDashboard() {
                   <div className="space-y-5">
                     {statusData.map((item) => {
                       const percentage =
-                        (item.count / totalBookings) * 100;
+                        (item.count / statistics.totalBookings) * 100;
 
                       return (
                         <div key={item.label}>
@@ -458,15 +523,19 @@ export default function CustomerDashboard() {
 
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                              booking.bookingStatus === "Confirmed"
-                                ? "bg-green-50 text-green-700"
-                                : booking.bookingStatus === "Cancelled"
-                                  ? "bg-red-50 text-red-700"
-                                  : "bg-yellow-50 text-yellow-700"
-                            }`}
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusStyle(booking.bookingStatus)}`}
                           >
                             {booking.bookingStatus}
+                          </span>
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              booking.paymentStatus === "Paid"
+                                ? "bg-green-50 text-green-700"
+                                : "bg-orange-50 text-orange-700"
+                            }`}
+                          >
+                            {booking.paymentStatus}
                           </span>
 
                           <span className="text-sm font-bold text-gray-900">
@@ -538,6 +607,14 @@ export default function CustomerDashboard() {
               <p className="mt-1 text-sm leading-6 text-gray-600">
                 Manage your bookings, favorites and payment activities from here.
               </p>
+
+              <Link
+                href="/dashboard/customer/profile"
+                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+              >
+                Manage Profile
+                <ArrowRight size={15} />
+              </Link>
             </div>
           </div>
         </section>

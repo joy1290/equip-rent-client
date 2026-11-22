@@ -11,32 +11,34 @@ import {
   User,
   ArrowRight,
   Loader2,
+  CheckCircle,
+  TrendingUp,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
-import AdminAnalytics from "@/components/dashboard/admin-analytics";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 interface Equipment {
   _id: string;
   name: string;
-  description: string;
-  category: string;
-  location: string;
-  rentalPrice: number;
-  rentalType: string;
-  availableQuantity: number;
-  condition: string;
-  brand: string;
-  model: string;
-  image: string;
-  rentalTerms: string;
   status: "Pending" | "Approved" | "Rejected";
-  ownerId?: string;
 }
 
 interface Booking {
   _id: string;
+  customerId: string;
+  ownerId: string;
   equipmentId: string;
-  userId: string;
   startDate: string;
   endDate: string;
   quantity: number;
@@ -44,6 +46,37 @@ interface Booking {
   bookingStatus: string;
   paymentStatus: string;
   createdAt: string;
+  equipment?: {
+    id: string;
+    name?: string;
+    category?: string;
+  };
+}
+
+interface MonthlyRevenue {
+  year: number;
+  month: number;
+  revenue: number;
+}
+
+interface OwnerAnalytics {
+  equipment: {
+    total: number;
+    approved: number;
+    pending: number;
+  };
+  bookings: {
+    total: number;
+    pending: number;
+    confirmed: number;
+    completed: number;
+    cancelled: number;
+  };
+  revenue: {
+    total: number;
+    paidTransactions: number;
+  };
+  monthlyRevenue: MonthlyRevenue[];
 }
 
 interface EquipmentResponse {
@@ -58,13 +91,23 @@ interface BookingResponse {
   data?: Booking[];
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+interface AnalyticsResponse {
+  success: boolean;
+  message?: string;
+  data?: OwnerAnalytics;
+}
 
 const dashboardCards = [
   {
     title: "Add Equipment",
     description: "Add new equipment for rent.",
     href: "/dashboard/owner/add-equipment",
+    icon: Package,
+  },
+  {
+    title: "My Equipment",
+    description: "View, edit and manage your listed equipment.",
+    href: "/dashboard/owner/my-equipment",
     icon: Package,
   },
   {
@@ -92,9 +135,16 @@ const formatAmount = (amount: number) => {
   return amount.toLocaleString("en-BD");
 };
 
+const getMonthName = (month: number) => {
+  return new Date(2000, month - 1).toLocaleString("en", {
+    month: "short",
+  });
+};
+
 export default function OwnerDashboard() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [analytics, setAnalytics] = useState<OwnerAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -108,25 +158,36 @@ export default function OwnerDashboard() {
         throw new Error("API URL is not configured.");
       }
 
-      const [equipmentRes, bookingRes] = await Promise.all([
-        fetch(`${API_URL}/equipment/my-equipment`, {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-          signal,
-        }),
-        fetch(`${API_URL}/bookings/owner-bookings`, {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-          signal,
-        }),
-      ]);
+      const [equipmentRes, bookingRes, analyticsRes] =
+        await Promise.all([
+          fetch(`${API_URL}/equipment/my-equipment`, {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            signal,
+          }),
 
-      const [equipmentData, bookingData] = await Promise.all([
-        equipmentRes.json() as Promise<EquipmentResponse>,
-        bookingRes.json() as Promise<BookingResponse>,
-      ]);
+          fetch(`${API_URL}/bookings/owner-bookings`, {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            signal,
+          }),
+
+          fetch(`${API_URL}/bookings/owner/analytics`, {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            signal,
+          }),
+        ]);
+
+      const [equipmentData, bookingData, analyticsData] =
+        await Promise.all([
+          equipmentRes.json() as Promise<EquipmentResponse>,
+          bookingRes.json() as Promise<BookingResponse>,
+          analyticsRes.json() as Promise<AnalyticsResponse>,
+        ]);
 
       if (!equipmentRes.ok || !equipmentData.success) {
         throw new Error(
@@ -141,23 +202,33 @@ export default function OwnerDashboard() {
       }
 
       if (
+        !analyticsRes.ok ||
+        !analyticsData.success ||
+        !analyticsData.data
+      ) {
+        throw new Error(
+          analyticsData.message || "Failed to load owner analytics."
+        );
+      }
+
+      if (
         !Array.isArray(equipmentData.equipment) ||
-        !Array.isArray(bookingData.data)
+        !Array.isArray(bookingData.data) ||
+        !Array.isArray(analyticsData.data.monthlyRevenue)
       ) {
         throw new Error("Invalid dashboard data received.");
       }
 
       setEquipment(equipmentData.equipment);
       setBookings(bookingData.data);
+      setAnalytics(analyticsData.data);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
 
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       if (!signal.aborted) {
@@ -171,56 +242,8 @@ export default function OwnerDashboard() {
 
     fetchDashboard(controller.signal);
 
-    return () => {
-      controller.abort();
-    };
+    return () => controller.abort();
   }, [fetchDashboard, retry]);
-
-  const totalEquipment = equipment.length;
-
-  const approvedEquipment = equipment.filter(
-    (item) => item.status === "Approved"
-  ).length;
-
-  const pendingBookings = bookings.filter(
-    (item) => item.bookingStatus === "Pending"
-  ).length;
-
-  const totalRevenue = bookings
-    .filter((item) => item.paymentStatus === "Paid")
-    .reduce(
-      (total, item) =>
-        total +
-        (Number.isFinite(item.totalAmount) ? item.totalAmount : 0),
-      0
-    );
-
-  const stats = [
-    {
-      title: "Total Equipment",
-      value: totalEquipment,
-      icon: Package,
-      description: `${approvedEquipment} approved`,
-    },
-    {
-      title: "Total Bookings",
-      value: bookings.length,
-      icon: CalendarDays,
-      description: `${pendingBookings} pending`,
-    },
-    {
-      title: "Total Revenue",
-      value: `৳${formatAmount(totalRevenue)}`,
-      icon: Wallet,
-      description: "From paid bookings",
-    },
-    {
-      title: "Pending Bookings",
-      value: pendingBookings,
-      icon: Clock,
-      description: "Need your attention",
-    },
-  ];
 
   if (loading) {
     return (
@@ -233,27 +256,66 @@ export default function OwnerDashboard() {
     );
   }
 
-  if (error) {
+  if (error || !analytics) {
     return (
       <div className="mx-auto max-w-5xl p-6">
         <p className="rounded-lg bg-red-50 p-4 text-red-600">
-          {error}
+          {error || "Unable to load dashboard."}
         </p>
 
         <button
           type="button"
           onClick={() => setRetry((previous) => previous + 1)}
-          className="mt-4 rounded-lg bg-indigo-600 px-5 py-2 text-white transition hover:bg-indigo-700"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-white transition hover:bg-indigo-700"
         >
+          <RefreshCw className="h-4 w-4" />
           Try Again
         </button>
       </div>
     );
   }
 
+  const stats = [
+    {
+      title: "Total Equipment",
+      value: analytics.equipment.total,
+      description: `${analytics.equipment.approved} approved`,
+      icon: Package,
+      color: "bg-indigo-50 text-indigo-600",
+    },
+    {
+      title: "Total Bookings",
+      value: analytics.bookings.total,
+      description: `${analytics.bookings.pending} pending`,
+      icon: CalendarDays,
+      color: "bg-blue-50 text-blue-600",
+    },
+    {
+      title: "Total Revenue",
+      value: `৳${formatAmount(analytics.revenue.total)}`,
+      description: `${analytics.revenue.paidTransactions} paid transactions`,
+      icon: Wallet,
+      color: "bg-green-50 text-green-600",
+    },
+    {
+      title: "Pending Bookings",
+      value: analytics.bookings.pending,
+      description: "Need your attention",
+      icon: Clock,
+      color: "bg-yellow-50 text-yellow-600",
+    },
+  ];
+
+  const monthlyChartData = analytics.monthlyRevenue.map((item) => ({
+    month: `${getMonthName(item.month)} ${item.year}`,
+    revenue: item.revenue,
+  }));
+
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8 md:px-8">
       <div className="mx-auto max-w-7xl">
+
+        {/* Header */}
         <div className="mb-8">
           <p className="text-sm font-medium text-indigo-600">
             OWNER PANEL
@@ -268,7 +330,7 @@ export default function OwnerDashboard() {
           </p>
         </div>
 
-        {/* Dashboard Statistics */}
+        {/* Statistics */}
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => {
             const Icon = stat.icon;
@@ -279,8 +341,8 @@ export default function OwnerDashboard() {
                 className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
               >
                 <div className="flex items-center justify-between">
-                  <div className="rounded-xl bg-indigo-50 p-3">
-                    <Icon className="h-6 w-6 text-indigo-600" />
+                  <div className={`rounded-xl p-3 ${stat.color}`}>
+                    <Icon className="h-6 w-6" />
                   </div>
                 </div>
 
@@ -300,55 +362,185 @@ export default function OwnerDashboard() {
           })}
         </div>
 
-        {/* Business Analytics */}
+        {/* Booking Overview */}
         <section className="mt-8">
-          <AdminAnalytics />
+          <h2 className="mb-5 text-xl font-bold text-gray-900">
+            Booking Overview
+          </h2>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                title: "Confirmed",
+                value: analytics.bookings.confirmed,
+                icon: CheckCircle,
+                color: "text-green-600 bg-green-50",
+              },
+              {
+                title: "Completed",
+                value: analytics.bookings.completed,
+                icon: CheckCircle,
+                color: "text-blue-600 bg-blue-50",
+              },
+              {
+                title: "Cancelled",
+                value: analytics.bookings.cancelled,
+                icon: XCircle,
+                color: "text-red-600 bg-red-50",
+              },
+              {
+                title: "Pending Equipment",
+                value: analytics.equipment.pending,
+                icon: Package,
+                color: "text-yellow-600 bg-yellow-50",
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.title}
+                  className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`rounded-lg p-2 ${item.color}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-500">
+                        {item.title}
+                      </p>
+
+                      <p className="text-xl font-bold text-gray-900">
+                        {item.value}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
 
-        {/* Dashboard Quick Links */}
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Equipment Management
-            </h2>
+        {/* Monthly Revenue Chart */}
+        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="rounded-xl bg-green-50 p-3">
+              <TrendingUp className="h-6 w-6 text-green-600" />
+            </div>
 
-            <p className="mt-2 text-sm text-gray-500">
-              Add and manage your rental equipment.
-            </p>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Monthly Revenue
+              </h2>
 
-            <Link
-              href="/dashboard/owner/add-equipment"
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              Add Equipment
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+              <p className="text-sm text-gray-500">
+                Your paid rental transactions by month.
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Booking Management
-            </h2>
+          {monthlyChartData.length === 0 ? (
+            <div className="flex h-72 items-center justify-center text-sm text-gray-500">
+              No paid revenue data available yet.
+            </div>
+          ) : (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={monthlyChartData}
+                  margin={{
+                    top: 10,
+                    right: 20,
+                    left: 10,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
 
-            <p className="mt-2 text-sm text-gray-500">
-              Review and manage customer booking requests.
-            </p>
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 12 }}
+                  />
+
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value: number) =>
+                      `৳${value.toLocaleString("en-BD")}`
+                    }
+                  />
+
+                  <Tooltip
+                    formatter={(value) => [
+                      `৳${Number(value).toLocaleString("en-BD")}`,
+                      "Revenue",
+                    ]}
+                  />
+
+                  <Bar
+                    dataKey="revenue"
+                    fill="#5c53fe"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </section>
+
+        {/* Quick Actions */}
+        <section className="mt-8">
+          <h2 className="mb-5 text-xl font-bold text-gray-900">
+            Quick Actions
+          </h2>
+
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {dashboardCards.map((card) => {
+              const Icon = card.icon;
+
+              return (
+                <Link
+                  key={card.title}
+                  href={card.href}
+                  className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="rounded-xl bg-indigo-50 p-3">
+                      <Icon className="h-6 w-6 text-indigo-600" />
+                    </div>
+
+                    <ArrowRight className="h-5 w-5 text-gray-400 transition group-hover:translate-x-1 group-hover:text-indigo-600" />
+                  </div>
+
+                  <h3 className="mt-5 font-semibold text-gray-900">
+                    {card.title}
+                  </h3>
+
+                  <p className="mt-2 text-sm text-gray-500">
+                    {card.description}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Recent Bookings */}
+        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Recent Bookings
+            </h2>
 
             <Link
               href="/dashboard/owner/bookings"
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-medium text-white hover:bg-indigo-700"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
             >
-              Manage Bookings
+              View All
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-        </div>
-
-        {/* Recent Bookings */}
-        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-lg font-semibold text-gray-900">
-            Recent Bookings
-          </h2>
 
           {bookings.length === 0 ? (
             <p className="text-sm text-gray-500">
@@ -368,51 +560,37 @@ export default function OwnerDashboard() {
                 </thead>
 
                 <tbody>
-                  {bookings.slice(0, 5).map((booking) => {
-                    const matchedEquipment = equipment.find(
-                      (item) => item._id === booking.equipmentId
-                    );
+                  {bookings.slice(0, 5).map((booking) => (
+                    <tr
+                      key={booking._id}
+                      className="border-b last:border-0"
+                    >
+                      <td className="py-4 pr-4 font-medium text-gray-800">
+                        {booking._id.slice(-8)}
+                      </td>
 
-                    return (
-                      <tr
-                        key={booking._id}
-                        className="border-b last:border-0"
-                      >
-                        <td className="py-4 pr-4 font-medium text-gray-800">
-                          {booking._id.slice(-8)}
-                        </td>
+                      <td className="py-4 pr-4">
+                        {booking.equipment?.name || "Equipment"}
+                      </td>
 
-                        <td className="py-4 pr-4">
-                          {matchedEquipment?.name || "Unknown"}
-                        </td>
+                      <td className="py-4 pr-4">
+                        ৳{formatAmount(booking.totalAmount)}
+                      </td>
 
-                        <td className="py-4 pr-4">
-                          ৳{formatAmount(booking.totalAmount)}
-                        </td>
+                      <td className="py-4 pr-4">
+                        {booking.bookingStatus}
+                      </td>
 
-                        <td className="py-4">
-                          {booking.bookingStatus}
-                        </td>
-
-                        <td className="py-4">
-                          {booking.paymentStatus}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                      <td className="py-4">
+                        {booking.paymentStatus}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           )}
-        </div>
-
-        <Link
-          href="/dashboard/owner/bookings"
-          className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
-        >
-          View All Bookings
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        </section>
       </div>
     </div>
   );

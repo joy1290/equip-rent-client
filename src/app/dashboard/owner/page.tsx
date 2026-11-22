@@ -1,8 +1,7 @@
-
-import OwnerDashboard from "./owner-client";
+import OwnerClient from "./owner-client";
 
 export const instant = false;
 
-export default function OwnerDashboardPage() {
-  return <OwnerDashboard />;
+export default function OwnerPage() {
+  return <OwnerClient />;
 }
