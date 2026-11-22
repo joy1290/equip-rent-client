@@ -1,21 +1,21 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_API_URL;
+const BACKEND_API_URL = (
+  process.env.BACKEND_API_URL ||
+  `${(
+    process.env.BACKEND_URL ||
+    (process.env.VERCEL
+      ? "https://equip-rent-server.vercel.app"
+      : "http://localhost:5000")
+  ).replace(/\/+$/, "")}/api`
+).replace(/\/+$/, "");
 
 async function handleRequest(request: NextRequest) {
-  if (!BACKEND_URL) {
-    return NextResponse.json(
-      { success: false, message: "BACKEND_API_URL is missing" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const path = new URL(request.url).pathname.replace(
-      /^\/api\/equipment/,
-      ""
-    );
+    const url = new URL(request.url);
+
+    const path = url.pathname.replace(/^\/api\/equipment/, "");
 
     const headers = new Headers();
 
@@ -27,13 +27,13 @@ async function handleRequest(request: NextRequest) {
 
     let body: string | undefined;
 
-    if (request.method === "PATCH" || request.method === "POST") {
+    if (["POST", "PATCH", "PUT"].includes(request.method)) {
       headers.set("Content-Type", "application/json");
       body = await request.text();
     }
 
     const response = await fetch(
-      `${BACKEND_URL}/equipment${path}`,
+      `${BACKEND_API_URL}/equipment${path}${url.search}`,
       {
         method: request.method,
         headers,
@@ -42,7 +42,18 @@ async function handleRequest(request: NextRequest) {
       }
     );
 
-    const data = await response.json();
+    const responseText = await response.text();
+
+    let data: unknown;
+
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = {
+        success: false,
+        message: responseText || "Invalid backend response.",
+      };
+    }
 
     return NextResponse.json(data, {
       status: response.status,
@@ -51,7 +62,10 @@ async function handleRequest(request: NextRequest) {
     console.error("Equipment proxy error:", error);
 
     return NextResponse.json(
-      { success: false, message: "Backend connection failed" },
+      {
+        success: false,
+        message: "Backend connection failed.",
+      },
       { status: 502 }
     );
   }
@@ -61,11 +75,15 @@ export async function GET(request: NextRequest) {
   return handleRequest(request);
 }
 
+export async function POST(request: NextRequest) {
+  return handleRequest(request);
+}
+
 export async function PATCH(request: NextRequest) {
   return handleRequest(request);
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   return handleRequest(request);
 }
 
