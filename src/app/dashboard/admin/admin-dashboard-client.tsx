@@ -112,9 +112,9 @@ interface ToastState {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
+const ANALYTICS_API_URL = `${API_URL}/analytics`;
 const EQUIPMENT_API_URL = `${API_URL}/equipment`;
 const BOOKING_API_URL = `${API_URL}/bookings`;
-const USER_API_URL = `${API_URL}/users`;
 
 const formatAmount = (amount: number) =>
   Number(amount || 0).toLocaleString("en-BD");
@@ -198,7 +198,7 @@ export default function AdminDashboard() {
         pendingResponse,
         bookingsResponse,
       ] = await Promise.all([
-        fetch(`${USER_API_URL}/analytics`, {
+        fetch(`${ANALYTICS_API_URL}/admin`, {
           credentials: "include",
           cache: "no-store",
         }),
@@ -224,55 +224,73 @@ export default function AdminDashboard() {
         bookingsResponse.json(),
       ]);
 
-      if (!analyticsResponse.ok || !analyticsData.success) {
+      // Analytics response validation
+
+      if (!analyticsResponse.ok || analyticsData.success !== true) {
         throw new Error(
           analyticsData.message || "Failed to load admin analytics."
         );
       }
 
-      if (!pendingResponse.ok) {
+      // Pending equipment response validation
+
+      if (!pendingResponse.ok || pendingData.success === false) {
         throw new Error(
           pendingData.message || "Failed to load pending equipment."
         );
       }
 
-      if (!bookingsResponse.ok) {
+      // Bookings response validation
+
+      if (!bookingsResponse.ok || bookingsData.success === false) {
         throw new Error(
           bookingsData.message || "Failed to load bookings."
         );
       }
 
+      const data = analyticsData.data;
+
+      if (!data) {
+        throw new Error("Analytics data is missing from the API response.");
+      }
+
+      // Update analytics
+
       setAnalytics({
-        ...defaultAnalytics,
-        ...analyticsData.data,
         users: {
           ...defaultAnalytics.users,
-          ...analyticsData.data.users,
+          ...data.users,
         },
+
         equipment: {
           ...defaultAnalytics.equipment,
-          ...analyticsData.data.equipment,
+          ...data.equipment,
         },
+
         bookings: {
           ...defaultAnalytics.bookings,
-          ...analyticsData.data.bookings,
+          ...data.bookings,
         },
+
         revenue: {
           ...defaultAnalytics.revenue,
-          ...analyticsData.data.revenue,
+          ...data.revenue,
         },
-        monthlyRevenue: Array.isArray(
-          analyticsData.data.monthlyRevenue
-        )
-          ? analyticsData.data.monthlyRevenue
+
+        monthlyRevenue: Array.isArray(data.monthlyRevenue)
+          ? data.monthlyRevenue
           : [],
       });
+
+      // Update pending equipment
 
       setEquipment(
         Array.isArray(pendingData.equipment)
           ? pendingData.equipment
           : []
       );
+
+      // Update bookings
 
       setBookings(
         Array.isArray(bookingsData.data)
@@ -304,7 +322,6 @@ export default function AdminDashboard() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchDashboardData();
-    showToast("Dashboard refreshed successfully.", "success");
   };
 
   // ==========================================
@@ -551,7 +568,6 @@ export default function AdminDashboard() {
       )}
 
       <div className="mx-auto max-w-7xl">
-
         {/* Header */}
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -582,6 +598,7 @@ export default function AdminDashboard() {
                 refreshing ? "animate-spin" : ""
               }`}
             />
+
             {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
@@ -645,7 +662,6 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-
             {/* Total Users */}
 
             <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -666,7 +682,8 @@ export default function AdminDashboard() {
               </div>
 
               <p className="mt-3 text-xs text-gray-500">
-                {users.customers} Customers · {users.owners} Owners · {users.admins} Admins
+                {users.customers} Customers · {users.owners} Owners ·{" "}
+                {users.admins} Admins
               </p>
             </div>
 
@@ -1044,9 +1061,7 @@ export default function AdminDashboard() {
                     <div className="grid grid-cols-2 gap-3 border-t pt-4">
                       <button
                         type="button"
-                        onClick={() =>
-                          updateStatus(item._id, "Approved")
-                        }
+                        onClick={() => updateStatus(item._id, "Approved")}
                         disabled={updatingId !== null}
                         className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-3 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1060,9 +1075,7 @@ export default function AdminDashboard() {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          updateStatus(item._id, "Rejected")
-                        }
+                        onClick={() => updateStatus(item._id, "Rejected")}
                         disabled={updatingId !== null}
                         className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
