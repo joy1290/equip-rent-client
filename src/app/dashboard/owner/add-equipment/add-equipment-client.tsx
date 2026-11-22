@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import ImageUpload from "@/components/ui/image-upload";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL || ""}/equipment`;
+const API_URL = "/api/equipment";
 
 interface ApiResponse {
   success?: boolean;
@@ -34,7 +34,7 @@ export default function AddEquipmentClient() {
   const [formData, setFormData] = useState(initialFormData);
 
   const handleChange = (
-    e: React.ChangeEvent<
+    e: ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >
   ) => {
@@ -50,11 +50,6 @@ export default function AddEquipmentClient() {
     e.preventDefault();
 
     if (loading) return;
-
-    if (!process.env.NEXT_PUBLIC_API_URL) {
-      toast.error("API URL is not configured.");
-      return;
-    }
 
     if (!formData.image.trim()) {
       toast.error("Please upload an equipment image.");
@@ -96,7 +91,9 @@ export default function AddEquipmentClient() {
       const data = (await response.json()) as ApiResponse;
 
       if (!response.ok || data.success === false) {
-        throw new Error(data.message || "Failed to add equipment.");
+        throw new Error(
+          data.message || "Failed to add equipment."
+        );
       }
 
       toast.success(
