@@ -1,19 +1,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_API_URL;
+const BACKEND_API_URL = (
+  process.env.BACKEND_API_URL ||
+  `${(
+    process.env.BACKEND_URL ||
+    (process.env.VERCEL
+      ? "https://equip-rent-server.vercel.app"
+      : "http://localhost:5000")
+  ).replace(/\/+$/, "")}/api`
+).replace(/\/+$/, "");
 
 async function handleRequest(request: NextRequest) {
-  if (!BACKEND_URL) {
-    return NextResponse.json(
-      { success: false, message: "BACKEND_API_URL is missing" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const pathname = new URL(request.url).pathname;
-    const path = pathname.replace(/^\/api\/users/, "");
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/^\/api\/users/, "");
 
     const headers = new Headers();
 
@@ -23,27 +24,37 @@ async function handleRequest(request: NextRequest) {
     const authorization = request.headers.get("authorization");
     if (authorization) headers.set("authorization", authorization);
 
-    const method = request.method;
+    const contentType = request.headers.get("content-type");
+    if (contentType) headers.set("content-type", contentType);
+
     let body: string | undefined;
 
-    if (method !== "GET" && method !== "HEAD") {
+    if (!["GET", "HEAD"].includes(request.method)) {
       body = await request.text();
-
-      const contentType = request.headers.get("content-type");
-      if (contentType) headers.set("content-type", contentType);
     }
 
     const response = await fetch(
-      `${BACKEND_URL}/users${path}`,
+      `${BACKEND_API_URL}/users${path}${url.search}`,
       {
-        method,
+        method: request.method,
         headers,
         body,
         cache: "no-store",
       }
     );
 
-    const data = await response.json();
+    const responseText = await response.text();
+
+    let data: unknown;
+
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = {
+        success: false,
+        message: responseText || "Invalid backend response.",
+      };
+    }
 
     return NextResponse.json(data, {
       status: response.status,
@@ -52,7 +63,10 @@ async function handleRequest(request: NextRequest) {
     console.error("Users proxy error:", error);
 
     return NextResponse.json(
-      { success: false, message: "Backend connection failed" },
+      {
+        success: false,
+        message: "Backend connection failed.",
+      },
       { status: 502 }
     );
   }
