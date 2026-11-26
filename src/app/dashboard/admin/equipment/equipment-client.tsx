@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -20,6 +21,8 @@ import {
   ShieldCheck,
   AlertCircle,
   Filter,
+  Pencil,
+  Save,
 } from "lucide-react";
 
 interface Equipment {
@@ -35,6 +38,7 @@ interface Equipment {
   brand: string;
   model: string;
   image: string;
+  rentalTerms?: string;
   status: "Pending" | "Approved" | "Rejected";
   createdAt: string;
 }
@@ -47,6 +51,45 @@ interface EquipmentStats {
 }
 
 type StatusFilter = "All" | "Pending" | "Approved" | "Rejected";
+
+type EquipmentFormData = {
+  name: string;
+  description: string;
+  category: string;
+  location: string;
+  rentalPrice: string;
+  rentalType: string;
+  availableQuantity: string;
+  condition: string;
+  brand: string;
+  model: string;
+  image: string;
+  rentalTerms: string;
+};
+
+const initialEditForm: EquipmentFormData = {
+  name: "",
+  description: "",
+  category: "Construction Equipment",
+  location: "",
+  rentalPrice: "",
+  rentalType: "Daily",
+  availableQuantity: "1",
+  condition: "",
+  brand: "",
+  model: "",
+  image: "",
+  rentalTerms: "",
+};
+
+const equipmentCategories = [
+  "Construction Equipment",
+  "Photography Equipment",
+  "Vehicles & Transportation",
+  "Agriculture Equipment",
+  "Electronics",
+  "Event Equipment",
+];
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/equipment`;
 
@@ -67,6 +110,15 @@ export default function AdminEquipmentPage() {
 
   const [selectedEquipment, setSelectedEquipment] =
     useState<Equipment | null>(null);
+
+  // Edit Equipment State
+  const [editingEquipment, setEditingEquipment] =
+    useState<Equipment | null>(null);
+
+  const [editForm, setEditForm] =
+    useState<EquipmentFormData>(initialEditForm);
+
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [stats, setStats] = useState<EquipmentStats>({
     totalEquipment: 0,
@@ -220,9 +272,7 @@ export default function AdminEquipmentPage() {
 
       setEquipment((previous) =>
         previous.map((item) =>
-          item._id === id
-            ? { ...item, status }
-            : item
+          item._id === id ? { ...item, status } : item
         )
       );
 
@@ -232,7 +282,10 @@ export default function AdminEquipmentPage() {
           : previous
       );
 
-      setMessage(data.message || `Equipment ${status.toLowerCase()} successfully!`);
+      setMessage(
+        data.message ||
+          `Equipment ${status.toLowerCase()} successfully!`
+      );
 
       await fetchStats();
     } catch (err) {
@@ -280,7 +333,9 @@ export default function AdminEquipmentPage() {
         previous?._id === id ? null : previous
       );
 
-      setMessage(data.message || "Equipment deleted successfully!");
+      setMessage(
+        data.message || "Equipment deleted successfully!"
+      );
 
       await fetchStats();
     } catch (err) {
@@ -291,6 +346,156 @@ export default function AdminEquipmentPage() {
       );
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEdit = (item: Equipment) => {
+    setEditingEquipment(item);
+
+    setEditForm({
+      name: item.name || "",
+      description: item.description || "",
+      category: item.category || "Construction Equipment",
+      location: item.location || "",
+      rentalPrice: String(item.rentalPrice ?? ""),
+      rentalType: item.rentalType || "Daily",
+      availableQuantity: String(item.availableQuantity ?? 1),
+      condition: item.condition || "",
+      brand: item.brand || "",
+      model: item.model || "",
+      image: item.image || "",
+      rentalTerms: item.rentalTerms || "",
+    });
+
+    setSelectedEquipment(null);
+    setError("");
+    setMessage("");
+  };
+
+  // Handle Edit Form Input
+  const handleEditChange = (
+    field: keyof EquipmentFormData,
+    value: string
+  ) => {
+    setEditForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
+
+  // Admin: Update Equipment
+  const handleEditSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (!editingEquipment) return;
+
+    const rentalPrice = Number(editForm.rentalPrice);
+    const availableQuantity = Number(editForm.availableQuantity);
+
+    if (!Number.isFinite(rentalPrice) || rentalPrice <= 0) {
+      setError("Rental price must be greater than zero.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(availableQuantity) ||
+      availableQuantity < 1
+    ) {
+      setError("Available quantity must be a positive integer.");
+      return;
+    }
+
+    const payload = {
+      name: editForm.name.trim(),
+      description: editForm.description.trim(),
+      category: editForm.category,
+      location: editForm.location.trim(),
+      rentalPrice,
+      rentalType: editForm.rentalType,
+      availableQuantity,
+      condition: editForm.condition.trim(),
+      brand: editForm.brand.trim(),
+      model: editForm.model.trim(),
+      image: editForm.image.trim(),
+      rentalTerms: editForm.rentalTerms.trim(),
+    };
+
+    try {
+      setSavingEdit(true);
+      setError("");
+      setMessage("");
+
+      const response = await fetch(
+        `${API_URL}/admin/${editingEquipment._id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        const validationMessage = Array.isArray(data.errors)
+          ? data.errors
+              .map(
+                (item: { field?: string; message?: string }) =>
+                  `${item.field || "Field"}: ${
+                    item.message || "Invalid value"
+                  }`
+              )
+              .join(", ")
+          : "";
+
+        throw new Error(
+          validationMessage ||
+            data.message ||
+            "Failed to update equipment."
+        );
+      }
+
+      const updatedEquipment: Equipment = {
+        ...editingEquipment,
+        ...payload,
+      };
+
+      setEquipment((previous) =>
+        previous.map((item) =>
+          item._id === editingEquipment._id
+            ? updatedEquipment
+            : item
+        )
+      );
+
+      setSelectedEquipment((previous) =>
+        previous?._id === editingEquipment._id
+          ? updatedEquipment
+          : previous
+      );
+
+      setMessage(
+        data.message || "Equipment updated successfully!"
+      );
+
+      setEditingEquipment(null);
+      setEditForm(initialEditForm);
+
+      await fetchStats();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
+      );
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -392,6 +597,7 @@ export default function AdminEquipmentPage() {
           </div>
 
           <button
+            type="button"
             onClick={refreshAll}
             disabled={loading}
             className="flex items-center justify-center gap-2 rounded-lg border bg-white px-5 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-100 disabled:opacity-50"
@@ -484,6 +690,7 @@ export default function AdminEquipmentPage() {
           <div className="mt-5 flex flex-wrap gap-2">
             {statusOptions.map((status) => (
               <button
+                type="button"
                 key={status}
                 onClick={() => setStatusFilter(status)}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -504,6 +711,7 @@ export default function AdminEquipmentPage() {
             </span>
 
             <button
+              type="button"
               onClick={() => {
                 setSearch("");
                 setStatusFilter("All");
@@ -532,6 +740,7 @@ export default function AdminEquipmentPage() {
             <p className="mt-2 text-sm text-gray-500">{error}</p>
 
             <button
+              type="button"
               onClick={refreshAll}
               className="mt-5 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700"
             >
@@ -645,6 +854,21 @@ export default function AdminEquipmentPage() {
                     {/* Action Buttons */}
                     <div className="space-y-3 border-t pt-4">
                       <button
+                        type="button"
+                        onClick={() => handleOpenEdit(item)}
+                        disabled={
+                          savingEdit ||
+                          deletingId !== null ||
+                          updatingId !== null
+                        }
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit Equipment
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => setSelectedEquipment(item)}
                         className="flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-3 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50"
                       >
@@ -655,6 +879,7 @@ export default function AdminEquipmentPage() {
                       {item.status === "Pending" && (
                         <div className="grid grid-cols-2 gap-3">
                           <button
+                            type="button"
                             onClick={() =>
                               handleStatusUpdate(
                                 item._id,
@@ -677,6 +902,7 @@ export default function AdminEquipmentPage() {
                           </button>
 
                           <button
+                            type="button"
                             onClick={() =>
                               handleStatusUpdate(
                                 item._id,
@@ -697,6 +923,7 @@ export default function AdminEquipmentPage() {
                       )}
 
                       <button
+                        type="button"
                         onClick={() =>
                           handleDelete(item._id, item.name)
                         }
@@ -724,6 +951,317 @@ export default function AdminEquipmentPage() {
           </>
         )}
 
+        {/* Admin Edit Equipment Modal */}
+        {editingEquipment && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/60 p-4"
+            onClick={() => {
+              if (!savingEdit) {
+                setEditingEquipment(null);
+                setError("");
+              }
+            }}
+          >
+            <div
+              className="my-auto max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-5">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Edit Equipment
+                  </h2>
+
+                  <p className="mt-1 text-sm text-gray-500">
+                    Update equipment information
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingEquipment(null);
+                    setError("");
+                  }}
+                  disabled={savingEdit}
+                  className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 disabled:opacity-50"
+                  aria-label="Close edit modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Edit Form */}
+              <form onSubmit={handleEditSubmit} className="p-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+
+                  {/* Equipment Name */}
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Equipment Name *
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      minLength={3}
+                      value={editForm.name}
+                      onChange={(event) =>
+                        handleEditChange("name", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Description *
+                    </label>
+
+                    <textarea
+                      required
+                      minLength={10}
+                      rows={4}
+                      value={editForm.description}
+                      onChange={(event) =>
+                        handleEditChange("description", event.target.value)
+                      }
+                      className="w-full resize-y rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Category *
+                    </label>
+
+                    <select
+                      required
+                      value={editForm.category}
+                      onChange={(event) =>
+                        handleEditChange("category", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    >
+                      {equipmentCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Location *
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      value={editForm.location}
+                      onChange={(event) =>
+                        handleEditChange("location", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Rental Price */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Rental Price (৳) *
+                    </label>
+
+                    <input
+                      type="number"
+                      required
+                      min="0.01"
+                      step="0.01"
+                      value={editForm.rentalPrice}
+                      onChange={(event) =>
+                        handleEditChange("rentalPrice", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Rental Type */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Rental Type *
+                    </label>
+
+                    <select
+                      required
+                      value={editForm.rentalType}
+                      onChange={(event) =>
+                        handleEditChange("rentalType", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="Daily">Daily</option>
+                      <option value="Weekly">Weekly</option>
+                      <option value="Monthly">Monthly</option>
+                    </select>
+                  </div>
+
+                  {/* Available Quantity */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Available Quantity *
+                    </label>
+
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      step="1"
+                      value={editForm.availableQuantity}
+                      onChange={(event) =>
+                        handleEditChange(
+                          "availableQuantity",
+                          event.target.value
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Condition */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Condition *
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      value={editForm.condition}
+                      onChange={(event) =>
+                        handleEditChange("condition", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Brand */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Brand *
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      value={editForm.brand}
+                      onChange={(event) =>
+                        handleEditChange("brand", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Model */}
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Model *
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      minLength={1}
+                      value={editForm.model}
+                      onChange={(event) =>
+                        handleEditChange("model", event.target.value)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Image URL */}
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Equipment Image URL *
+                    </label>
+
+                    <input
+                      type="url"
+                      required
+                      value={editForm.image}
+                      onChange={(event) =>
+                        handleEditChange("image", event.target.value)
+                      }
+                      placeholder="https://example.com/image.jpg"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+
+                  {/* Rental Terms */}
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Rental Terms *
+                    </label>
+
+                    <textarea
+                      required
+                      minLength={5}
+                      rows={3}
+                      value={editForm.rentalTerms}
+                      onChange={(event) =>
+                        handleEditChange("rentalTerms", event.target.value)
+                      }
+                      placeholder="Enter rental terms and conditions..."
+                      className="w-full resize-y rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Buttons */}
+                <div className="mt-7 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingEquipment(null);
+                      setError("");
+                    }}
+                    disabled={savingEdit}
+                    className="rounded-lg border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={savingEdit}
+                    className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingEdit ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving Changes...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Equipment Details Modal */}
         {selectedEquipment && (
           <div
@@ -739,12 +1277,14 @@ export default function AdminEquipmentPage() {
                   <h2 className="text-xl font-bold text-gray-900">
                     Equipment Details
                   </h2>
+
                   <p className="text-sm text-gray-500">
                     Complete equipment information
                   </p>
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => setSelectedEquipment(null)}
                   className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
                   aria-label="Close details"
@@ -839,11 +1379,29 @@ export default function AdminEquipmentPage() {
                       {formatDate(selectedEquipment.createdAt)}
                     </p>
                   </div>
+
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-gray-500">Rental Terms</p>
+                    <p className="mt-1 whitespace-pre-wrap font-semibold text-gray-900">
+                      {selectedEquipment.rentalTerms || "N/A"}
+                    </p>
+                  </div>
                 </div>
+
+                {/* Edit from Details */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenEdit(selectedEquipment)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit Equipment
+                </button>
 
                 {selectedEquipment.status === "Pending" && (
                   <div className="grid grid-cols-2 gap-3">
                     <button
+                      type="button"
                       onClick={() =>
                         handleStatusUpdate(
                           selectedEquipment._id,
@@ -859,6 +1417,7 @@ export default function AdminEquipmentPage() {
                     </button>
 
                     <button
+                      type="button"
                       onClick={() =>
                         handleStatusUpdate(
                           selectedEquipment._id,
